@@ -73,6 +73,18 @@ export default function SimulatePage() {
     }
   }, [profile]);
 
+  // Initialise activity hour to the cleanest forecast hour on load
+  const initialHourSet = useRef(false);
+  useEffect(() => {
+    if (!snapshot?.forecast || snapshot.forecast.length === 0 || initialHourSet.current) return;
+    const eligible = snapshot.forecast.filter((h) => h.hour >= 5 && h.hour <= 22);
+    if (eligible.length > 0) {
+      const cleanest = eligible.reduce((min, h) => (h.pm25 < min.pm25 ? h : min), eligible[0]);
+      setActivityHour(cleanest.hour);
+      initialHourSet.current = true;
+    }
+  }, [snapshot]);
+
   // Redirect if no profile after loading
   useEffect(() => {
     if (isLoaded && !profile) {
@@ -170,7 +182,9 @@ export default function SimulatePage() {
           {/* Toggle: Air purifier */}
           <div className="flex items-center justify-between gap-4">
             <div className="flex-1 min-w-0">
-              <p className="font-medium text-sm">Add an air purifier</p>
+              <p className="font-medium text-sm">
+                {profile?.home?.hasPurifier ? "Run air purifier" : "Add an air purifier"}
+              </p>
               <p className="text-muted-foreground text-xs mt-0.5">
                 95% PM2.5 filtration (CADR 300 m³/h)
               </p>

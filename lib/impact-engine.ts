@@ -25,6 +25,9 @@ import type {
   DailyExposureResult,
   PersonalizedDoseBlock,
   CommuteModeType,
+  AQISnapshot,
+  SimulateToggles,
+  SimulateResult,
 } from "./types";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -146,6 +149,76 @@ export function computePurifierImpact(
   return {
     fractionRemaining,
     pctReduction: Math.round((1 - fractionRemaining) * 100),
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 5b. What-If Simulator Impact Engine
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Computes live simulation results for the What-If Simulator.
+ * Reflects both purifier benefits (for 24h indoor time) and activity hour / commute adjustments.
+ */
+export function computeSimulatedImpact(
+  profile: Profile,
+  aqiSnapshot: AQISnapshot,
+  toggles: SimulateToggles
+): SimulateResult {
+  const pm25 = aqiSnapshot.pm25;
+  const durationMin = toggles.activityDurationMin ?? 60;
+  const outdoorHours = durationMin / 60;
+  const indoorHours = Math.max(0, 24 - outdoorHours);
+
+  // 1. Purifier impact (box model: 300 m³/h CADR in 30 m³ room yields ~95% drop)
+  const { pctReduction: pctIndoorDrop, fractionRemaining } = computePurifierImpact();
+  const indoorPM25After = toggles.purifierOn ? pm25 * fractionRemaining : pm25 * 0.75;
+
+  // 2. Commute CO₂ saved
+  const co2SavedKgWeek = computeCommuteCO2Saved(
+    profile.commute.mode,
+    toggles.commuteMode,
+    profile.commute.distanceKm,
+    profile.commute.tripsPerWeek
+  );
+
+  // 3. Activity hours
+  const baselineOutdoorPM25 = pm25;
+  const hourEntry = aqiSnapshot.forecast.find((h: HourlyAQI) => h.hour === toggles.activityHour);
+  const optimizedOutdoorPM25 = hourEntry?.pm25 ?? pm25;
+
+  // Baseline scenario: natural infiltration (0.75) without active purifier
+  const baselineIndoorPM25 = pm25 * 0.75;
+  const baselineIndoorDose = computeInhaledDose(baselineIndoorPM25, "light", indoorHours * 60);
+  const baselineOutdoorDose = computeInhaledDose(baselineOutdoorPM25, "moderate", durationMin);
+  const totalBaselineDose = baselineIndoorDose + baselineOutdoorDose;
+
+  // Optimized scenario: user's chosen simulation toggles
+  const optimizedIndoorDose = computeInhaledDose(indoorPM25After, "light", indoorHours * 60);
+  const optimizedOutdoorDose = computeInhaledDose(optimizedOutdoorPM25, "moderate", durationMin);
+  const totalOptimizedDose = optimizedIndoorDose + optimizedOutdoorDose;
+
+  const exposureAvoidedUg = computeExposureAvoided(totalBaselineDose, totalOptimizedDose);
+
+  // 4. Daily mean PM2.5 for cigarette-equivalents (reflects full 24h indoor + outdoor)
+  const meanBaselinePM25 = (baselineIndoorPM25 * indoorHours + baselineOutdoorPM25 * outdoorHours) / 24;
+  const meanOptimizedPM25 = (indoorPM25After * indoorHours + optimizedOutdoorPM25 * outdoorHours) / 24;
+
+  const baselineCigEq = toCigaretteEquivalent(meanBaselinePM25, 24);
+  const optimizedCigEq = toCigaretteEquivalent(meanOptimizedPM25, 24);
+
+  const pctExposureCut =
+    totalBaselineDose > 0
+      ? Math.round(((totalBaselineDose - totalOptimizedDose) / totalBaselineDose) * 100)
+      : 0;
+
+  return {
+    indoorPM25After: Math.round(indoorPM25After * 10) / 10,
+    pctIndoorDrop: toggles.purifierOn ? pctIndoorDrop : 0,
+    co2SavedKgWeek: Math.round(co2SavedKgWeek * 100) / 100,
+    exposureAvoidedUg: Math.round(exposureAvoidedUg * 10) / 10,
+    baselineCigEq: Math.round(baselineCigEq * 10) / 10,
+    optimizedCigEq: Math.round(optimizedCigEq * 10) / 10,
+    pctExposureCut,
   };
 }
 

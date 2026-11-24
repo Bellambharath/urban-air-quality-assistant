@@ -1,350 +1,316 @@
+// TODO: When GOOGLE_AIR_QUALITY_API_KEY is set in .env.local, replace static AQI estimates
+// with Google Maps Air Quality heatmap tiles:
+// https://airquality.googleapis.com/v1/mapTypes/UAQI_INDIGO_PERSIAN/heatmapTiles/{zoom}/{x}/{y}?key=KEY
+// Add as <image> or CSS background tiles within the view at the appropriate zoom level.
+
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, MapPin, RefreshCw, Check, ArrowRight, ShieldAlert } from "lucide-react";
-import { SUPPORTED_CITIES, type CityName } from "@/lib/constants";
-import { getBand, type CPCBBand } from "@/lib/cpcb-bands";
+import { ArrowLeft, Check, Sparkles } from "lucide-react";
+import { SUPPORTED_CITIES } from "@/lib/constants";
+import { getBand } from "@/lib/cpcb-bands";
 import { useProfile } from "@/hooks/useProfile";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
-// ─── Default seed AQI estimates for Indian metros ─────────────────────────────
-// Updated live via /api/aqi as cities are selected or loaded.
-const SEED_AQI: Record<string, number> = {
-  Delhi: 325,
+// ─── Static AQI estimates (fallback when live AQI is unavailable) ───────────
+// Only the user's selected/current city is fetched live from /api/aqi.
+const STATIC_AQI: Record<string, number> = {
+  Delhi: 300,
+  Mumbai: 150,
+  Bengaluru: 100,
+  Hyderabad: 120,
+  Chennai: 80,
+  Kolkata: 200,
+  Pune: 130,
+  Ahmedabad: 180,
   Lucknow: 280,
   Jaipur: 220,
-  Kolkata: 200,
-  Ahmedabad: 180,
-  Mumbai: 150,
-  Pune: 130,
-  Hyderabad: 120,
-  Bengaluru: 95,
-  Chennai: 75,
 };
 
-export default function CityComparisonPage() {
+export default function MapPage() {
   const router = useRouter();
   const { profile, isLoaded, updateProfile } = useProfile();
 
-  // Selected city defaults to profile city or Delhi
-  const [selectedCityName, setSelectedCityName] = useState<string>("Delhi");
-  const [cityAQIs, setCityAQIs] = useState<Record<string, number>>(SEED_AQI);
-  const [loadingCity, setLoadingCity] = useState<string | null>(null);
-  const [errorCity, setErrorCity] = useState<string | null>(null);
+  const [selectedCity, setSelectedCity] = useState<string | null>(null);
+  const [liveAQI, setLiveAQI] = useState<number | null>(null);
+  const [loadingAQI, setLoadingAQI] = useState(false);
+  const [aqiError, setAqiError] = useState<string | null>(null);
 
-  // Sync selected city with profile once loaded
-  useEffect(() => {
-    if (profile?.city) {
-      setSelectedCityName(profile.city);
-    }
-  }, [profile?.city]);
+  // Active highlighted city: defaults to user profile city, or fallback to Delhi
+  const activeCity = selectedCity ?? profile?.city ?? "Delhi";
 
-  // Fetch live AQI for a specific city
-  const fetchCityAQI = useCallback(async (cityName: string, lat: number, lng: number) => {
-    setLoadingCity(cityName);
-    setErrorCity(null);
-    try {
-      const res = await fetch(`/api/aqi?lat=${lat}&lng=${lng}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      if (typeof data.aqi === "number") {
-        setCityAQIs((prev) => ({ ...prev, [cityName]: data.aqi }));
-      }
-    } catch (err) {
-      setErrorCity(err instanceof Error ? err.message : "Failed to load");
-    } finally {
-      setLoadingCity(null);
-    }
-  }, []);
-
-  // Fetch live AQI for user's profile city on mount
+  // ── Fetch live AQI for user's city on mount ──────────────────────────────
   useEffect(() => {
     if (!isLoaded || !profile) return;
-    const targetCity = SUPPORTED_CITIES.find((c) => c.name === profile.city) ?? SUPPORTED_CITIES[0];
-    fetchCityAQI(targetCity.name, targetCity.lat, targetCity.lng);
-  }, [isLoaded, profile, fetchCityAQI]);
+    setLoadingAQI(true);
+    setAqiError(null);
+    fetch(`/api/aqi?lat=${profile.lat}&lng=${profile.lng}`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then((data: { aqi?: number; indexes?: Array<{ aqi: number }> }) => {
+        const value =
+          typeof data.aqi === "number"
+            ? data.aqi
+            : Array.isArray(data.indexes) && data.indexes[0]?.aqi != null
+            ? data.indexes[0].aqi
+            : null;
+        setLiveAQI(value);
+      })
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        setAqiError(msg);
+      })
+      .finally(() => setLoadingAQI(false));
+  }, [isLoaded, profile]);
 
-  // When user selects a different city, fetch its live data if not yet fetched
-  const handleSelectCity = (city: (typeof SUPPORTED_CITIES)[number]) => {
-    setSelectedCityName(city.name);
-    fetchCityAQI(city.name, city.lat, city.lng);
-  };
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function getAQIForCity(cityName: string): number {
+    if (cityName === profile?.city && liveAQI !== null) return liveAQI;
+    return STATIC_AQI[cityName] ?? 100;
+  }
 
-  const handleSetAsMyCity = (cityName: string) => {
+  function handleSetCityAndNavigate(cityName: string) {
     const city = SUPPORTED_CITIES.find((c) => c.name === cityName);
     if (!city) return;
     updateProfile({ city: city.name, lat: city.lat, lng: city.lng });
     router.push("/dashboard");
-  };
+  }
 
-  // Helper to get AQI for city
-  const getAQI = useCallback(
-    (name: string) => cityAQIs[name] ?? SEED_AQI[name] ?? 100,
-    [cityAQIs]
-  );
+  // Sort cities worst-to-best (highest AQI first)
+  const sortedCities = [...SUPPORTED_CITIES].sort((a, b) => {
+    const aqiA = getAQIForCity(a.name);
+    const aqiB = getAQIForCity(b.name);
+    return aqiB - aqiA; // Worst (highest AQI) first
+  });
 
-  // Active city info — guaranteed to match the header and pulsing card
-  const activeCity = useMemo(() => {
-    return SUPPORTED_CITIES.find((c) => c.name === selectedCityName) ?? SUPPORTED_CITIES[0];
-  }, [selectedCityName]);
+  const activeCityAQI = getAQIForCity(activeCity);
+  const activeCityBand = getBand(activeCityAQI);
+  const isActiveLive = activeCity === profile?.city && liveAQI !== null;
 
-  const activeAQI = getAQI(activeCity.name);
-  const activeBand = getBand(activeAQI);
-  const isUserCity = profile?.city === activeCity.name;
-
-  // Sorted cities: Worst (highest AQI) to Best (lowest AQI)
-  const sortedCities = useMemo(() => {
-    return [...SUPPORTED_CITIES].sort((a, b) => getAQI(b.name) - getAQI(a.name));
-  }, [getAQI]);
-
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col">
-      {/* Header navigation */}
-      <header className="sticky top-0 z-20 border-b border-border bg-background/80 backdrop-blur-md px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
+    <div className="min-h-screen bg-background text-foreground">
+      {/* Top Nav */}
+      <header className="sticky top-0 z-10 border-b border-border bg-background/80 backdrop-blur-sm">
+        <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
           <Button
             variant="ghost"
             size="sm"
             onClick={() => router.push("/dashboard")}
             className="gap-1.5"
           >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Dashboard</span>
+            <ArrowLeft className="size-4" />
+            Dashboard
           </Button>
-          <div className="h-4 w-px bg-border" />
-          <h1 className="text-sm font-semibold tracking-tight">City AQI Comparison</h1>
+          <h1 className="text-sm font-semibold tracking-tight text-center">
+            City AQI Comparison 🗺️
+          </h1>
+          <div className="w-20" /> {/* Spacer for centering */}
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => fetchCityAQI(activeCity.name, activeCity.lat, activeCity.lng)}
-          disabled={loadingCity === activeCity.name}
-          className="text-xs gap-1.5"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loadingCity === activeCity.name ? "animate-spin" : ""}`} />
-          <span>Refresh</span>
-        </Button>
       </header>
 
-      <main className="max-w-2xl mx-auto w-full px-4 py-6 space-y-6 flex-1 pb-28">
-        {/* Active city live banner — exactly matches highlighted card */}
-        <motion.div
-          key={activeCity.name}
-          initial={{ opacity: 0, y: -6 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="rounded-2xl border p-5 space-y-3 relative overflow-hidden shadow-sm"
-          style={{
-            borderColor: `${activeBand.hex}50`,
-            backgroundColor: `${activeBand.hex}12`,
-          }}
-        >
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-1">
+      <main className="flex flex-col items-center gap-6 px-4 py-6 max-w-3xl mx-auto">
+        {/* Dynamic Active City Header Strip — strictly matches active/highlighted city */}
+        <div className="w-full rounded-xl border border-border bg-card/60 p-4 text-center">
+          {loadingAQI && activeCity === profile?.city ? (
+            <Skeleton className="h-5 w-56 mx-auto" />
+          ) : (
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-2 text-sm">
               <div className="flex items-center gap-2">
                 <span
-                  className="relative flex h-3 w-3 shrink-0"
+                  className="inline-block w-2.5 h-2.5 rounded-full shrink-0 animate-pulse"
+                  style={{ backgroundColor: activeCityBand.hex }}
+                />
+                <span className="text-muted-foreground">
+                  {isActiveLive ? "Live AQI" : "AQI"} for{" "}
+                  <strong className="text-foreground">{activeCity}</strong>:
+                </span>
+                <span
+                  style={{ color: activeCityBand.hex }}
+                  className="font-bold tabular-nums text-base"
                 >
-                  <span
-                    className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
-                    style={{ backgroundColor: activeBand.hex }}
-                  />
-                  <span
-                    className="relative inline-flex rounded-full h-3 w-3"
-                    style={{ backgroundColor: activeBand.hex }}
-                  />
+                  {activeCityAQI}
                 </span>
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Active Selected City
+                <span
+                  className="px-2 py-0.5 rounded-full text-xs font-semibold"
+                  style={{
+                    backgroundColor: `${activeCityBand.hex}22`,
+                    color: activeCityBand.hex,
+                    border: `1px solid ${activeCityBand.hex}44`,
+                  }}
+                >
+                  {activeCityBand.name}
                 </span>
-                {isUserCity && (
-                  <span className="text-[11px] font-medium bg-primary/20 text-primary px-2 py-0.5 rounded-full">
-                    Your Saved Location
-                  </span>
-                )}
               </div>
-              <h2 className="text-xl font-bold tracking-tight">
-                Live AQI for <span className="underline decoration-2" style={{ textDecorationColor: activeBand.hex }}>{activeCity.name}</span>
-              </h2>
+
+              {activeCity !== profile?.city ? (
+                <button
+                  onClick={() => handleSetCityAndNavigate(activeCity)}
+                  className="text-xs text-primary hover:underline font-medium cursor-pointer ml-1"
+                >
+                  Switch to {activeCity} & view dashboard →
+                </button>
+              ) : (
+                <span className="text-xs text-muted-foreground/80">
+                  (Your current city)
+                </span>
+              )}
             </div>
+          )}
 
-            <div className="text-right shrink-0">
-              <div
-                className="text-3xl font-black tabular-nums leading-none"
-                style={{ color: activeBand.hex }}
-              >
-                {loadingCity === activeCity.name ? (
-                  <Skeleton className="h-8 w-16 ml-auto" />
-                ) : (
-                  activeAQI
-                )}
-              </div>
-              <span
-                className="text-xs font-semibold inline-block mt-1 px-2 py-0.5 rounded-full"
-                style={{
-                  backgroundColor: `${activeBand.hex}25`,
-                  color: activeBand.hex,
-                }}
-              >
-                {activeBand.name}
-              </span>
-            </div>
-          </div>
-
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            {activeBand.advice}
-          </p>
-
-          {/* Action button: set as active city */}
-          <div className="pt-1 flex items-center justify-between gap-3">
-            <p className="text-[11px] text-muted-foreground/75">
-              Lat: {activeCity.lat.toFixed(2)}°, Lng: {activeCity.lng.toFixed(2)}°
+          {aqiError && activeCity === profile?.city && (
+            <p className="text-xs text-destructive mt-1">
+              Could not refresh live station: {aqiError} (showing baseline estimate)
             </p>
-            {!isUserCity ? (
-              <Button
-                size="sm"
-                onClick={() => handleSetAsMyCity(activeCity.name)}
-                className="text-xs gap-1.5"
-              >
-                <span>Set as my city & open Dashboard</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </Button>
-            ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => router.push("/dashboard")}
-                className="text-xs gap-1.5"
-              >
-                <Check className="w-3.5 h-3.5 text-primary" />
-                <span>Return to my Dashboard</span>
-              </Button>
-            )}
-          </div>
-        </motion.div>
-
-        {/* Section title & sorting note */}
-        <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
-          <span className="font-semibold uppercase tracking-wider">
-            All 10 Metros (Sorted Worst → Cleanest)
-          </span>
-          <span>Click any card to select</span>
+          )}
         </div>
 
-        {/* 10-City Comparison Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {sortedCities.map((city, idx) => {
-            const aqi = getAQI(city.name);
+        {/* Section Heading */}
+        <div className="w-full flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-semibold">10-City Comparison Grid</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              CPCB National Ambient Air Quality Standard · Sorted worst to best
+            </p>
+          </div>
+          <span className="text-xs text-muted-foreground bg-muted/60 px-2.5 py-1 rounded-full border border-border">
+            Worst → Best
+          </span>
+        </div>
+
+        {/* Clean Worst-to-Best Comparison Grid (No hand-drawn boundary) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 w-full">
+          {sortedCities.map((city, index) => {
+            const aqi = getAQIForCity(city.name);
             const band = getBand(aqi);
-            const isActive = city.name === activeCity.name;
-            const isUserSaved = profile?.city === city.name;
-            const isLoading = loadingCity === city.name;
+            const isUserCity = profile?.city === city.name;
+            const isActive = activeCity === city.name;
+            const isLive = isUserCity && liveAQI !== null;
 
             return (
-              <motion.button
+              <motion.div
                 key={city.name}
-                onClick={() => handleSelectCity(city)}
-                whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.99 }}
-                className={`relative w-full rounded-xl border p-4 text-left transition-all flex flex-col justify-between gap-3 ${
+                layout
+                onClick={() => setSelectedCity(city.name)}
+                className={`relative rounded-xl border p-4 cursor-pointer transition-all duration-200 flex flex-col justify-between gap-3 ${
                   isActive
-                    ? "ring-2 ring-primary ring-offset-2 ring-offset-background bg-card shadow-md"
-                    : "bg-card/70 border-border hover:border-muted-foreground/40 hover:bg-card"
+                    ? "bg-card shadow-md ring-2 ring-offset-2 ring-offset-background"
+                    : "bg-card/60 hover:bg-card border-border hover:border-foreground/20"
                 }`}
                 style={{
-                  borderLeftWidth: "4px",
-                  borderLeftColor: band.hex,
+                  borderColor: isActive ? band.hex : undefined,
+                  boxShadow: isActive ? `0 0 16px ${band.hex}25` : undefined,
                 }}
               >
-                {/* Top row: Rank & City Name */}
-                <div className="flex items-center justify-between w-full gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-[11px] font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0">
-                      #{idx + 1}
+                {/* Header row: City name + tags */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="text-xs font-bold text-muted-foreground w-4 tabular-nums"
+                      title={`Rank #${index + 1}`}
+                    >
+                      #{index + 1}
                     </span>
-                    <span className="font-bold text-base truncate">
+                    <span className="font-semibold text-base text-foreground">
                       {city.name}
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {isActive && (
-                      <span
-                        className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
-                        style={{
-                          backgroundColor: `${band.hex}25`,
-                          color: band.hex,
-                        }}
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: band.hex }} />
-                        Active
+                  <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                    {isUserCity && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 border border-primary/30 px-2 py-0.5 text-[11px] font-medium text-primary">
+                        <Check className="size-3" />
+                        Your City {isLive ? "· Live" : ""}
                       </span>
                     )}
-                    {isUserSaved && !isActive && (
-                      <span className="text-[10px] font-medium bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
-                        Saved
+                    {isActive && !isUserCity && (
+                      <span className="rounded-full bg-muted border border-border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                        Selected
                       </span>
                     )}
                   </div>
                 </div>
 
-                {/* Middle row: Big AQI and CPCB band badge */}
-                <div className="flex items-end justify-between w-full">
-                  <div>
+                {/* AQI Metric & CPCB Band */}
+                <div className="flex items-baseline justify-between gap-2">
+                  <div className="flex items-baseline gap-2">
                     <span
-                      className="text-xs font-semibold inline-block px-2 py-0.5 rounded-full"
-                      style={{
-                        backgroundColor: `${band.hex}20`,
-                        color: band.hex,
-                      }}
-                    >
-                      {band.name}
-                    </span>
-                    <p className="text-[11px] text-muted-foreground mt-1 line-clamp-1">
-                      {band.meaning}
-                    </p>
-                  </div>
-
-                  <div className="text-right shrink-0">
-                    <div
-                      className="text-2xl font-black tabular-nums leading-none"
+                      className="text-3xl font-black tracking-tight tabular-nums"
                       style={{ color: band.hex }}
                     >
-                      {isLoading ? "…" : aqi}
-                    </div>
-                    <span className="text-[10px] text-muted-foreground">CPCB AQI</span>
+                      {loadingAQI && isUserCity ? "…" : aqi}
+                    </span>
+                    <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+                      AQI
+                    </span>
                   </div>
+
+                  <span
+                    className="rounded-full px-2.5 py-0.5 text-xs font-bold"
+                    style={{
+                      backgroundColor: `${band.hex}18`,
+                      color: band.hex,
+                      border: `1px solid ${band.hex}40`,
+                    }}
+                  >
+                    {band.name}
+                  </span>
                 </div>
-              </motion.button>
+
+                {/* Advisory guidance */}
+                <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">
+                  {band.advice}
+                </p>
+
+                {/* Action button on active card */}
+                {isActive && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="pt-1 border-t border-border/60"
+                  >
+                    <Button
+                      size="sm"
+                      className="w-full gap-1.5 text-xs font-medium"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSetCityAndNavigate(city.name);
+                      }}
+                    >
+                      <Sparkles className="size-3.5" />
+                      Set as my city & view dashboard →
+                    </Button>
+                  </motion.div>
+                )}
+              </motion.div>
             );
           })}
         </div>
 
-        {/* CPCB Scale Reference Strip */}
-        <div className="rounded-xl border border-border bg-card/40 p-4 space-y-2.5">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-            Official CPCB AQI Scale
-          </p>
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center text-[11px]">
+        {/* Legend */}
+        <div className="w-full rounded-xl border border-border bg-card/40 p-4 text-xs text-muted-foreground">
+          <p className="font-semibold text-foreground mb-2">CPCB AQI Scale Reference</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {[
-              { name: "Good", range: "0–50", hex: "#22c55e" },
-              { name: "Satisfactory", range: "51–100", hex: "#a3e635" },
-              { name: "Moderate", range: "101–200", hex: "#facc15" },
-              { name: "Poor", range: "201–300", hex: "#f97316" },
-              { name: "Very Poor", range: "301–400", hex: "#ef4444" },
-              { name: "Severe", range: "401–500", hex: "#7f1d1d" },
-            ].map((b) => (
-              <div key={b.name} className="flex flex-col items-center gap-1">
+              { name: "Good (0–50)", hex: "#22c55e" },
+              { name: "Satisfactory (51–100)", hex: "#a3e635" },
+              { name: "Moderate (101–200)", hex: "#facc15" },
+              { name: "Poor (201–300)", hex: "#f97316" },
+              { name: "Very Poor (301–400)", hex: "#ef4444" },
+              { name: "Severe (401–500)", hex: "#7f1d1d" },
+            ].map((item) => (
+              <div key={item.name} className="flex items-center gap-2">
                 <span
-                  className="w-full h-1.5 rounded-full"
-                  style={{ backgroundColor: b.hex }}
+                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                  style={{ backgroundColor: item.hex }}
                 />
-                <span className="font-semibold text-[10px]" style={{ color: b.hex }}>
-                  {b.name}
-                </span>
-                <span className="text-[9px] text-muted-foreground">{b.range}</span>
+                <span className="text-[11px] truncate">{item.name}</span>
               </div>
             ))}
           </div>

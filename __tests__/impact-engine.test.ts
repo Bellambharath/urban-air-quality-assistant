@@ -14,12 +14,13 @@ import {
   doseUgToCigaretteEquivalent,
   computeCommuteCO2Saved,
   computePurifierImpact,
+  computeSimulatedImpact,
   computeVentilationWindow,
   computePersonalDailyExposure,
   isOutdoorSafe,
   outdoorRisk,
 } from "../lib/impact-engine";
-import type { HourlyAQI, Profile } from "../lib/types";
+import type { HourlyAQI, Profile, AQISnapshot } from "../lib/types";
 
 // ─── Shared test fixtures ───────────────────────────────────────────────────
 
@@ -348,5 +349,68 @@ describe("outdoorRisk", () => {
 
   it("stricter threshold: AQI 120 → stayIndoors for asthma (stayIndoors at 151 — no, avoid at 100)", () => {
     expect(outdoorRisk(120, "asthma")).toBe("avoid");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 10. computeSimulatedImpact (What-If Simulator)
+// ─────────────────────────────────────────────────────────────────────────────
+describe("computeSimulatedImpact", () => {
+  const snapshot = {
+    city: "Delhi",
+    station: "ITO, Delhi",
+    aqi: 250,
+    pm25: 150,
+    pm10: 220,
+    dominantPollutant: "pm25",
+    updatedAt: new Date().toISOString(),
+    forecast: [
+      { hour: 7, aqi: 250, pm25: 150, pm10: 220 },
+      { hour: 14, aqi: 80, pm25: 35, pm10: 50 },
+    ],
+  } as unknown as AQISnapshot;
+
+  it("toggling purifierOn from false to true drops optimizedCigEq significantly", () => {
+    const withoutPurifier = computeSimulatedImpact(MOCK_PROFILE, snapshot, {
+      purifierOn: false,
+      commuteMode: "car_petrol",
+      activityHour: 7,
+      activityDurationMin: 60,
+    });
+
+    const withPurifier = computeSimulatedImpact(MOCK_PROFILE, snapshot, {
+      purifierOn: true,
+      commuteMode: "car_petrol",
+      activityHour: 7,
+      activityDurationMin: 60,
+    });
+
+    expect(withoutPurifier.baselineCigEq).toBeGreaterThan(4);
+    // Baseline and without-purifier are nearly equal when hour=7
+    expect(withoutPurifier.optimizedCigEq).toBeCloseTo(withoutPurifier.baselineCigEq, 0);
+
+    // With purifier, optimized cigarette equivalents should drop dramatically (< 1.5)
+    expect(withPurifier.optimizedCigEq).toBeLessThan(1.5);
+    expect(withPurifier.pctExposureCut).toBeGreaterThan(70);
+    expect(withPurifier.pctIndoorDrop).toBeGreaterThan(90);
+  });
+
+  it("shifting activityHour to cleanest hour reduces exposure", () => {
+    const peakHour = computeSimulatedImpact(MOCK_PROFILE, snapshot, {
+      purifierOn: false,
+      commuteMode: "car_petrol",
+      activityHour: 7, // pm25 = 150
+      activityDurationMin: 60,
+    });
+
+    const cleanHour = computeSimulatedImpact(MOCK_PROFILE, snapshot, {
+      purifierOn: false,
+      commuteMode: "car_petrol",
+      activityHour: 14, // pm25 = 35
+      activityDurationMin: 60,
+    });
+
+    expect(cleanHour.exposureAvoidedUg).toBeGreaterThan(peakHour.exposureAvoidedUg);
+    expect(cleanHour.pctExposureCut).toBeGreaterThan(0);
   });
 });
