@@ -5,6 +5,8 @@
  * Body: { messages: ChatMessage[], profile: Profile, aqiSnapshot: AQISnapshot }
  *
  * Reliable non-streaming generateContent (same approach as /api/plan).
+ * Primary: gemini-flash-lite-latest (fast, high quota)
+ * Fallback: gemini-2.5-flash
  * Returns: SSE text/event-stream or application/json.
  * Guardrails: profile + live AQI injected; model forbidden from inventing numbers.
  */
@@ -18,7 +20,6 @@ export const runtime = "nodejs";
 
 const CANDIDATE_MODELS = [
   "gemini-flash-lite-latest",
-  "gemini-3.5-flash",
   "gemini-2.5-flash",
 ];
 
@@ -70,12 +71,16 @@ export async function POST(request: NextRequest) {
   const genAI = new GoogleGenerativeAI(apiKey);
   const systemInstruction = buildChatSystemPrompt(profile, aqiSnapshot);
 
-  // Non-streaming generateContent with multi-model fallback and transient retry
+  // Non-streaming generateContent with fail-fast multi-model fallback and 12s timeout
   let replyText = "";
   let lastError: unknown = null;
 
-  for (const modelName of CANDIDATE_MODELS) {
-    for (let attempt = 1; attempt <= 2; attempt++) {
+  const timeoutPromise = new Promise<string>((_, reject) =>
+    setTimeout(() => reject(new Error("Chat request timed out")), 12000)
+  );
+
+  const generatePromise = (async (): Promise<string> => {
+    for (const modelName of CANDIDATE_MODELS) {
       try {
         const model = genAI.getGenerativeModel({
           model: modelName,
@@ -87,18 +92,25 @@ export async function POST(request: NextRequest) {
         });
 
         const result = await model.generateContent({ contents });
-        replyText = result.response.text();
-        if (replyText) break;
+        const text = result.response.text();
+        if (text) return text;
       } catch (err: unknown) {
         lastError = err;
-        console.warn(`[/api/chat] ${modelName} attempt ${attempt} error:`, err);
-        // If transient 503 or 429, wait briefly before retrying
-        if (attempt < 2) {
-          await new Promise((r) => setTimeout(r, 400));
-        }
+        console.warn(`[/api/chat] ${modelName} failed fast:`, err);
+        // Fail fast immediately to next model
       }
     }
-    if (replyText) break;
+    return "";
+  })();
+
+  try {
+    replyText = await Promise.race([generatePromise, timeoutPromise]);
+  } catch (err) {
+    console.error("[/api/chat] Chat generation failed or timed out:", err);
+    return NextResponse.json(
+      { error: "Chat generation timed out. Please try again." },
+      { status: 504 }
+    );
   }
 
   if (!replyText) {

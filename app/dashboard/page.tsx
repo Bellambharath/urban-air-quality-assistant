@@ -1,32 +1,34 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { RefreshCw, AlertCircle, Settings, MessageCircle, Map as MapIcon } from "lucide-react";
+import { Settings, RefreshCw, AlertCircle, MessageCircle, Map as MapIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AQIGauge } from "@/components/aqi/AQIGauge";
-import { AQIBadge } from "@/components/aqi/AQIBadge";
 import { SafeWindowStrip } from "@/components/aqi/SafeWindowStrip";
-import { ExposureMeter } from "@/components/exposure/ExposureMeter";
-import { PlanTomorrowCard } from "@/components/forecast/PlanTomorrowCard";
 import { PlanTimeline } from "@/components/plan/PlanTimeline";
+import { PlanTomorrowCard } from "@/components/forecast/PlanTomorrowCard";
+import { ExposureMeter } from "@/components/exposure/ExposureMeter";
+import { LanguageToggle } from "@/components/ui/LanguageToggle";
 import { useProfile } from "@/hooks/useProfile";
 import { useAQI } from "@/hooks/useAQI";
 import { getBand } from "@/lib/cpcb-bands";
-import type { PlanResponse } from "@/lib/types";
-import { LanguageToggle } from "@/components/ui/LanguageToggle";
 import { useT } from "@/lib/LocaleContext";
+import type { PlanResponse } from "@/lib/types";
 
 export default function DashboardPage() {
   const router = useRouter();
   const tStr = useT();
   const { profile, isLoaded } = useProfile();
-  const { snapshot, error: aqiError, isLoading: aqiLoading, refresh } = useAQI(
-    profile?.lat ?? null,
-    profile?.lng ?? null
-  );
+
+  const {
+    snapshot,
+    isLoading: aqiLoading,
+    error: aqiError,
+    refresh,
+  } = useAQI(profile?.lat ?? null, profile?.lng ?? null);
 
   const [plan, setPlan] = useState<PlanResponse | null>(null);
   const [planLoading, setPlanLoading] = useState(false);
@@ -37,23 +39,50 @@ export default function DashboardPage() {
     if (isLoaded && !profile) router.replace("/onboarding");
   }, [isLoaded, profile, router]);
 
-  // Fetch plan when AQI + profile are available
+  // Fetch plan when AQI + profile are available with 15s timeout
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   const fetchPlan = useCallback(async () => {
     if (!profile || !snapshot) return;
+
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setPlanLoading(true);
     setPlanError(null);
+
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, 15000);
+
     try {
       const res = await fetch("/api/plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ profile, aqiSnapshot: snapshot }),
+        signal: controller.signal,
       });
-      if (!res.ok) throw new Error("Plan generation failed");
+      clearTimeout(timeoutId);
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Plan generation failed");
+      }
       const data: PlanResponse = await res.json();
       setPlan(data);
     } catch (err) {
-      setPlanError(err instanceof Error ? err.message : "Unknown error");
+      setPlanError(
+        err instanceof Error && err.name === "AbortError"
+          ? "Plan generation timed out. Please try again."
+          : err instanceof Error
+          ? err.message
+          : "Could not generate plan"
+      );
     } finally {
+      clearTimeout(timeoutId);
       setPlanLoading(false);
     }
   }, [profile, snapshot]);
@@ -110,13 +139,7 @@ export default function DashboardPage() {
           >
             <MapIcon className="w-4 h-4" />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={refresh}
-            disabled={aqiLoading}
-            title="Refresh AQI"
-          >
+          <Button variant="ghost" size="icon" onClick={refresh} title="Refresh AQI">
             <RefreshCw className={`w-4 h-4 ${aqiLoading ? "animate-spin" : ""}`} />
           </Button>
           <Button variant="ghost" size="icon" onClick={() => router.push("/onboarding")} title="Edit profile">
@@ -217,16 +240,18 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {planError && (
-            <div className="text-sm text-muted-foreground bg-muted/40 rounded-lg p-4 text-center space-y-2">
-              <p>Could not generate your plan. The AI service may be unavailable.</p>
-              <Button size="sm" variant="outline" onClick={fetchPlan}>
-                Try again
+          {planError ? (
+            <div className="text-sm text-muted-foreground bg-muted/40 border border-border rounded-xl p-5 text-center space-y-3">
+              <p className="text-foreground font-medium">Could not generate your Clean-Air Plan</p>
+              <p className="text-xs text-muted-foreground">{planError}</p>
+              <Button size="sm" variant="outline" onClick={fetchPlan} className="gap-2 mx-auto">
+                <RefreshCw className="size-3.5" />
+                Retry Plan
               </Button>
             </div>
+          ) : (
+            <PlanTimeline items={plan?.items ?? []} isLoading={planLoading} />
           )}
-
-          <PlanTimeline items={plan?.items ?? []} isLoading={planLoading} />
         </section>
 
         {/* What-if link */}

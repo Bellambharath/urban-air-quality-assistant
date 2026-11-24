@@ -8,19 +8,28 @@
  *   Stage 1: Context assembly (code)
  *   Stage 2: Candidate selection (code — lib/personalization.ts)
  *   Stage 3: Impact scoring (code — lib/impact-engine.ts, done in Stage 2)
- *   Stage 4: Gemini select & explain (structured output)
+ *   Stage 4: Gemini select & explain (structured JSON with fail-fast & timeout)
  *   Stage 5: Overwrite impact_value from engine (code — model's value DISCARDED)
+ *
+ * Primary model: gemini-flash-lite-latest (fast, high quota)
+ * Fallback model: gemini-2.5-flash
+ * Overall timeout: 12s so it can NEVER hang.
  *
  * Returns: PlanResponse JSON
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { selectAndScoreCandidates, buildPlanItems } from "@/lib/personalization";
 import { buildPlanSystemPrompt, buildPlanUserPrompt, buildMorningBriefPrompt } from "@/lib/prompts";
 import type { Profile, AQISnapshot, PlanItem, PlanResponse } from "@/lib/types";
 
-// ─── Gemini setup ─────────────────────────────────────────────────────────────
+export const runtime = "nodejs";
+
+const CANDIDATE_MODELS = [
+  "gemini-flash-lite-latest",
+  "gemini-2.5-flash",
+];
 
 function getGemini() {
   const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
@@ -28,34 +37,88 @@ function getGemini() {
   return new GoogleGenerativeAI(apiKey);
 }
 
-// ─── Gemini response schema ───────────────────────────────────────────────────
+// ─── Stage 4 Helper with 12s overall timeout and immediate fail-fast ───────────
 
-const PLAN_RESPONSE_SCHEMA = {
-  type: SchemaType.OBJECT,
-  properties: {
-    recommendations: {
-      type: SchemaType.ARRAY,
-      items: {
-        type: SchemaType.OBJECT,
-        properties: {
-          id:            { type: SchemaType.STRING },
-          category:      { type: SchemaType.STRING, enum: ["routine", "indoor", "alternative"] },
-          title:         { type: SchemaType.STRING },
-          when:          { type: SchemaType.STRING },
-          explanation:   { type: SchemaType.STRING },
-          impact_metric: { type: SchemaType.STRING, enum: ["pm25_exposure_avoided", "co2_saved_kg", "indoor_pm25_drop"] },
-          impact_value:  { type: SchemaType.NUMBER },
-          impact_unit:   { type: SchemaType.STRING },
-          effort:        { type: SchemaType.STRING, enum: ["low", "medium", "high"] },
-        },
-        required: ["id", "category", "title", "when", "explanation", "impact_metric", "impact_value", "impact_unit", "effort"],
-      },
-      minItems: 4,
-      maxItems: 6,
-    },
-  },
-  required: ["recommendations"],
-};
+async function generatePlanItemsWithTimeout(
+  genAI: GoogleGenerativeAI,
+  userPrompt: string,
+  locale: string,
+  timeoutMs = 12000
+): Promise<PlanItem[]> {
+  const timeoutPromise = new Promise<PlanItem[]>((resolve) =>
+    setTimeout(() => {
+      console.warn("[/api/plan] Stage 4 AI generation reached timeout, falling back to engine items");
+      resolve([]);
+    }, timeoutMs)
+  );
+
+  const generatePromise = (async (): Promise<PlanItem[]> => {
+    for (const modelName of CANDIDATE_MODELS) {
+      try {
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          systemInstruction: buildPlanSystemPrompt(locale),
+          generationConfig: {
+            responseMimeType: "application/json",
+            temperature: 0.4,
+            maxOutputTokens: 2048,
+          },
+        });
+        const result = await model.generateContent(userPrompt);
+        const rawJson = result.response.text();
+        if (rawJson) {
+          const parsed = JSON.parse(rawJson);
+          if (Array.isArray(parsed.recommendations) && parsed.recommendations.length > 0) {
+            return parsed.recommendations;
+          }
+        }
+      } catch (err) {
+        console.warn(`[/api/plan] ${modelName} failed fast, trying next fallback:`, err);
+        // Fail fast to next model immediately with no blocking sleep
+      }
+    }
+    return [];
+  })();
+
+  return Promise.race([generatePromise, timeoutPromise]);
+}
+
+// ─── Morning Brief Helper with 3s timeout ─────────────────────────────────────
+
+async function generateMorningBriefWithTimeout(
+  genAI: GoogleGenerativeAI,
+  profile: Profile,
+  aqiSnapshot: AQISnapshot,
+  timeoutMs = 3000
+): Promise<string | undefined> {
+  const hour = new Date().getHours();
+  if (hour < 5 || hour > 11) return undefined;
+
+  const timeoutPromise = new Promise<undefined>((resolve) =>
+    setTimeout(() => resolve(undefined), timeoutMs)
+  );
+
+  const briefPromise = (async (): Promise<string | undefined> => {
+    for (const modelName of CANDIDATE_MODELS) {
+      try {
+        const briefModel = genAI.getGenerativeModel({
+          model: modelName,
+          generationConfig: { temperature: 0.6, maxOutputTokens: 200 },
+        });
+        const briefResult = await briefModel.generateContent(
+          buildMorningBriefPrompt(profile, aqiSnapshot)
+        );
+        const text = briefResult.response.text().trim();
+        if (text) return text;
+      } catch {
+        // Fail fast to next candidate
+      }
+    }
+    return undefined;
+  })();
+
+  return Promise.race([briefPromise, timeoutPromise]);
+}
 
 // ─── Route handler ────────────────────────────────────────────────────────────
 
@@ -68,7 +131,7 @@ export async function POST(request: NextRequest) {
     profile = body.profile;
     aqiSnapshot = body.aqiSnapshot;
     if (!profile || !aqiSnapshot) throw new Error("Missing profile or aqiSnapshot");
-  } catch (err) {
+  } catch {
     return NextResponse.json(
       { error: "Invalid request body", code: "invalid_params" },
       { status: 400 }
@@ -78,7 +141,7 @@ export async function POST(request: NextRequest) {
   // ── Stage 2 + 3: Candidate selection + impact scoring ──────────────────────
   const scoredCandidates = selectAndScoreCandidates(profile, aqiSnapshot);
 
-  // ── Stage 4: Gemini structured output ─────────────────────────────────────
+  // ── Stage 4: Gemini select & explain (fail-fast, primary: gemini-flash-lite-latest)
   let geminiItems: PlanItem[] = [];
   let morningBrief: string | undefined;
 
@@ -86,54 +149,16 @@ export async function POST(request: NextRequest) {
     const genAI = getGemini();
     const userPrompt = buildPlanUserPrompt(profile, aqiSnapshot, scoredCandidates);
 
-    // Try primary model (gemini-2.5-flash) with fallback to gemini-flash-lite-latest
-    let rawJson = "";
-    for (const modelName of ["gemini-2.5-flash", "gemini-flash-lite-latest", "gemini-3.5-flash"]) {
-      try {
-        const model = genAI.getGenerativeModel({
-          model: modelName,
-          systemInstruction: buildPlanSystemPrompt(profile.locale),
-          generationConfig: {
-            responseMimeType: "application/json",
-            responseSchema: PLAN_RESPONSE_SCHEMA as any,
-            temperature: 0.4,
-            maxOutputTokens: 4096,
-          },
-        });
-        const result = await model.generateContent(userPrompt);
-        rawJson = result.response.text();
-        if (rawJson) break;
-      } catch (modelErr) {
-        console.warn(`[/api/plan] ${modelName} failed, trying next candidate:`, modelErr);
-      }
-    }
+    // Run plan generation and morning brief in parallel with strict timeouts
+    const [itemsResult, briefResult] = await Promise.all([
+      generatePlanItemsWithTimeout(genAI, userPrompt, profile.locale, 12000),
+      generateMorningBriefWithTimeout(genAI, profile, aqiSnapshot, 3000),
+    ]);
 
-    if (rawJson) {
-      const parsed = JSON.parse(rawJson);
-      geminiItems = parsed.recommendations ?? [];
-    }
-
-    // Morning brief (separate, lighter call — only if 5–11 AM)
-    const hour = new Date().getHours();
-    if (hour >= 5 && hour <= 11) {
-      for (const modelName of ["gemini-2.5-flash", "gemini-flash-lite-latest"]) {
-        try {
-          const briefModel = genAI.getGenerativeModel({
-            model: modelName,
-            generationConfig: { temperature: 0.6, maxOutputTokens: 200 },
-          });
-          const briefResult = await briefModel.generateContent(
-            buildMorningBriefPrompt(profile, aqiSnapshot)
-          );
-          morningBrief = briefResult.response.text().trim();
-          if (morningBrief) break;
-        } catch {
-          // Try next or skip
-        }
-      }
-    }
+    geminiItems = itemsResult;
+    morningBrief = briefResult;
   } catch (err) {
-    console.error("[/api/plan] Gemini call failed:", err);
+    console.error("[/api/plan] Gemini Stage 4 error:", err);
   }
 
   // ── Stage 5: Overwrite impact_value from Impact Engine ────────────────────
