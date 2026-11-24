@@ -4,8 +4,9 @@
  * POST /api/chat
  * Body: { messages: ChatMessage[], profile: Profile, aqiSnapshot: AQISnapshot }
  *
- * Returns: Server-Sent Events (text/event-stream) — Gemini streaming response
- * Guardrails: profile + live AQI injected; model forbidden from inventing numbers
+ * Reliable non-streaming generateContent (same approach as /api/plan).
+ * Returns: SSE text/event-stream or application/json.
+ * Guardrails: profile + live AQI injected; model forbidden from inventing numbers.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -14,6 +15,12 @@ import { buildChatSystemPrompt } from "@/lib/prompts";
 import type { Profile, AQISnapshot, ChatMessage } from "@/lib/types";
 
 export const runtime = "nodejs";
+
+const CANDIDATE_MODELS = [
+  "gemini-flash-lite-latest",
+  "gemini-3.5-flash",
+  "gemini-2.5-flash",
+];
 
 export async function POST(request: NextRequest) {
   let profile: Profile;
@@ -41,22 +48,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
-    systemInstruction: buildChatSystemPrompt(profile, aqiSnapshot),
-    generationConfig: {
-      temperature: 0.5,
-      maxOutputTokens: 1024,
-    },
-  });
-
-  // Build Gemini chat history from messages (exclude the last user message — sent as new turn)
-  const history = messages.slice(0, -1).map((msg) => ({
-    role: msg.role === "assistant" ? "model" : "user",
-    parts: [{ text: msg.content }],
-  }));
-
   const lastMessage = messages[messages.length - 1];
   if (!lastMessage || lastMessage.role !== "user") {
     return NextResponse.json(
@@ -65,29 +56,72 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Stream response
+  // Build Gemini chat history from messages
+  const history = messages.slice(0, -1).map((msg) => ({
+    role: msg.role === "assistant" ? "model" : "user",
+    parts: [{ text: msg.content }],
+  }));
+
+  const contents = [
+    ...history,
+    { role: "user", parts: [{ text: lastMessage.content }] },
+  ];
+
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const systemInstruction = buildChatSystemPrompt(profile, aqiSnapshot);
+
+  // Non-streaming generateContent with multi-model fallback and transient retry
+  let replyText = "";
+  let lastError: unknown = null;
+
+  for (const modelName of CANDIDATE_MODELS) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          systemInstruction,
+          generationConfig: {
+            temperature: 0.5,
+            maxOutputTokens: 2048,
+          },
+        });
+
+        const result = await model.generateContent({ contents });
+        replyText = result.response.text();
+        if (replyText) break;
+      } catch (err: unknown) {
+        lastError = err;
+        console.warn(`[/api/chat] ${modelName} attempt ${attempt} error:`, err);
+        // If transient 503 or 429, wait briefly before retrying
+        if (attempt < 2) {
+          await new Promise((r) => setTimeout(r, 400));
+        }
+      }
+    }
+    if (replyText) break;
+  }
+
+  if (!replyText) {
+    console.error("[/api/chat] All Gemini models failed:", lastError);
+    return NextResponse.json(
+      { error: "Could not generate chat response. Please try again." },
+      { status: 500 }
+    );
+  }
+
+  // If client prefers application/json, return JSON directly
+  const acceptHeader = request.headers.get("accept") ?? "";
+  if (acceptHeader.includes("application/json") && !acceptHeader.includes("text/event-stream")) {
+    return NextResponse.json({ text: replyText });
+  }
+
+  // Otherwise stream via Server-Sent Events (SSE)
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
-    async start(controller) {
-      try {
-        const chat = model.startChat({ history });
-        const result = await chat.sendMessageStream(lastMessage.content);
-
-        for await (const chunk of result.stream) {
-          const text = chunk.text();
-          if (text) {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`));
-          }
-        }
-        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-      } catch (err) {
-        console.error("[/api/chat] Stream error:", err);
-        controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ error: "Stream failed" })}\n\n`)
-        );
-      } finally {
-        controller.close();
-      }
+    start(controller) {
+      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: replyText })}\n\n`));
+      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      controller.close();
     },
   });
 

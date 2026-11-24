@@ -17,6 +17,8 @@ const SUGGESTED_PROMPTS = [
   "What's the safest time for my morning run?",
 ];
 
+const FRIENDLY_ERROR_MESSAGE = "Sorry, I couldn't get a response right now. Please try again.";
+
 export default function ChatPage() {
   const router = useRouter();
   const { profile } = useProfile();
@@ -44,7 +46,7 @@ export default function ChatPage() {
     setInput("");
     setIsStreaming(true);
 
-    // Placeholder for streaming response
+    // Placeholder assistant message
     const assistantId = `a-${Date.now()}`;
     setMessages((prev) => [
       ...prev,
@@ -54,26 +56,65 @@ export default function ChatPage() {
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "text/event-stream, application/json",
+        },
         body: JSON.stringify({ messages: updatedMessages, profile, aqiSnapshot: snapshot }),
       });
 
-      if (!res.body) throw new Error("No stream");
+      // Handle non-200 responses cleanly
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${res.status}`);
+      }
+
+      const contentType = res.headers.get("content-type") || "";
+
+      // If server returned application/json
+      if (contentType.includes("application/json")) {
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        if (!data.text) throw new Error("No response text");
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId ? { ...m, content: data.text } : m
+          )
+        );
+        return;
+      }
+
+      // If server returned SSE text/event-stream
+      if (!res.body) throw new Error("No response body");
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let accumulated = "";
+      let hasError = false;
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         const chunk = decoder.decode(value, { stream: true });
         for (const line of chunk.split("\n")) {
-          if (line.startsWith("data: ")) {
-            const data = line.slice(6);
+          const trimmed = line.trim();
+          if (trimmed.startsWith("data: ")) {
+            const data = trimmed.slice(6).trim();
             if (data === "[DONE]") break;
             try {
               const parsed = JSON.parse(data);
+              // Server-sent error event (e.g. data: {"error":"..."})
+              if (parsed.error) {
+                hasError = true;
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantId
+                      ? { ...m, content: FRIENDLY_ERROR_MESSAGE }
+                      : m
+                  )
+                );
+                break;
+              }
               if (parsed.text) {
                 accumulated += parsed.text;
                 setMessages((prev) =>
@@ -85,12 +126,24 @@ export default function ChatPage() {
             } catch {}
           }
         }
+        if (hasError) break;
       }
-    } catch (err) {
+
+      // If stream closed without producing text
+      if (!hasError && !accumulated.trim()) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId
+              ? { ...m, content: FRIENDLY_ERROR_MESSAGE }
+              : m
+          )
+        );
+      }
+    } catch {
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantId
-            ? { ...m, content: "Sorry, I couldn't respond right now. Please try again." }
+            ? { ...m, content: FRIENDLY_ERROR_MESSAGE }
             : m
         )
       );
@@ -150,9 +203,13 @@ export default function ChatPage() {
                     : "bg-muted text-foreground rounded-bl-sm"
                 }`}
               >
-                {msg.content || (isStreaming && msg.role === "assistant" ? (
+                {msg.content ? (
+                  <p className="whitespace-pre-wrap">{msg.content}</p>
+                ) : isStreaming && msg.role === "assistant" ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
-                ) : null)}
+                ) : (
+                  <p>{FRIENDLY_ERROR_MESSAGE}</p>
+                )}
               </div>
             </motion.div>
           ))}
@@ -174,7 +231,12 @@ export default function ChatPage() {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(input); } }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage(input);
+              }
+            }}
             placeholder="Ask about today's air quality…"
             className="flex-1 bg-muted/50 border border-border rounded-full px-4 py-2 text-sm outline-none focus:border-muted-foreground/50"
             disabled={isStreaming}

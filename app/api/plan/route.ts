@@ -84,46 +84,56 @@ export async function POST(request: NextRequest) {
 
   try {
     const genAI = getGemini();
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
-      systemInstruction: buildPlanSystemPrompt(profile.locale),
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: PLAN_RESPONSE_SCHEMA as any,
-        temperature: 0.4,
-        maxOutputTokens: 4096,
-      },
-    });
-
     const userPrompt = buildPlanUserPrompt(profile, aqiSnapshot, scoredCandidates);
-    const result = await model.generateContent(userPrompt);
-    const rawJson = result.response.text();
-    const parsed = JSON.parse(rawJson);
 
-    geminiItems = parsed.recommendations ?? [];
+    // Try primary model (gemini-2.5-flash) with fallback to gemini-flash-lite-latest
+    let rawJson = "";
+    for (const modelName of ["gemini-2.5-flash", "gemini-flash-lite-latest", "gemini-3.5-flash"]) {
+      try {
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          systemInstruction: buildPlanSystemPrompt(profile.locale),
+          generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: PLAN_RESPONSE_SCHEMA as any,
+            temperature: 0.4,
+            maxOutputTokens: 4096,
+          },
+        });
+        const result = await model.generateContent(userPrompt);
+        rawJson = result.response.text();
+        if (rawJson) break;
+      } catch (modelErr) {
+        console.warn(`[/api/plan] ${modelName} failed, trying next candidate:`, modelErr);
+      }
+    }
+
+    if (rawJson) {
+      const parsed = JSON.parse(rawJson);
+      geminiItems = parsed.recommendations ?? [];
+    }
 
     // Morning brief (separate, lighter call — only if 5–11 AM)
     const hour = new Date().getHours();
     if (hour >= 5 && hour <= 11) {
-      try {
-        const briefModel = genAI.getGenerativeModel({
-          model: "gemini-2.5-flash",
-          generationConfig: { temperature: 0.6, maxOutputTokens: 200 },
-        });
-        const briefResult = await briefModel.generateContent(
-          buildMorningBriefPrompt(profile, aqiSnapshot)
-        );
-        morningBrief = briefResult.response.text().trim();
-      } catch {
-        // Brief is non-critical — silently skip on error
+      for (const modelName of ["gemini-2.5-flash", "gemini-flash-lite-latest"]) {
+        try {
+          const briefModel = genAI.getGenerativeModel({
+            model: modelName,
+            generationConfig: { temperature: 0.6, maxOutputTokens: 200 },
+          });
+          const briefResult = await briefModel.generateContent(
+            buildMorningBriefPrompt(profile, aqiSnapshot)
+          );
+          morningBrief = briefResult.response.text().trim();
+          if (morningBrief) break;
+        } catch {
+          // Try next or skip
+        }
       }
     }
   } catch (err) {
     console.error("[/api/plan] Gemini call failed:", err);
-    return NextResponse.json(
-      { error: "Plan generation failed. Please try again.", code: "gemini_error" },
-      { status: 503 }
-    );
   }
 
   // ── Stage 5: Overwrite impact_value from Impact Engine ────────────────────
