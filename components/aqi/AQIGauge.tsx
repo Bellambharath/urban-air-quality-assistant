@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
-import { motion, useMotionValue, useTransform, animate } from "framer-motion";
+import { motion } from "framer-motion";
 import { CPCB_BANDS, getLocalizedBand, getBandHex } from "@/lib/cpcb-bands";
 import { useLocale } from "@/lib/LocaleContext";
 import { cn } from "@/lib/utils";
@@ -42,22 +41,6 @@ export function AQIGauge({ aqi, pm25, size = 220, className }: AQIGaugeProps) {
 
   const band = getLocalizedBand(aqi, locale);
   const hex  = getBandHex(aqi);
-
-  // Animated needle value
-  const motionAQI = useMotionValue(0);
-  const needleAngle = useTransform(
-    motionAQI,
-    [0, MAX_AQI],
-    [START_ANGLE, START_ANGLE + TOTAL_SWEEP]
-  );
-
-  useEffect(() => {
-    const controls = animate(motionAQI, Math.min(aqi, MAX_AQI), {
-      duration: 1.4,
-      ease: "easeOut",
-    });
-    return controls.stop;
-  }, [aqi, motionAQI]);
 
   // Build band arc segments
   let prevAngle = START_ANGLE;
@@ -149,20 +132,6 @@ export function AQIGauge({ aqi, pm25, size = 220, className }: AQIGaugeProps) {
           </text>
         )}
 
-        {/* Needle */}
-        <motion.g style={{ rotate: needleAngle, originX: `${cx}px`, originY: `${cy}px` }}>
-          <line
-            x1={cx}
-            y1={cy}
-            x2={cx}
-            y2={cy - r + strokeW / 2}
-            stroke={hex}
-            strokeWidth={size * 0.018}
-            strokeLinecap="round"
-            opacity={0.9}
-          />
-          <circle cx={cx} cy={cy} r={size * 0.025} fill={hex} />
-        </motion.g>
       </svg>
 
       {/* Meaning text below gauge */}
