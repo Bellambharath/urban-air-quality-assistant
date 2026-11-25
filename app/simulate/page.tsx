@@ -341,7 +341,7 @@ export default function SimulatePage() {
 
               {result.exposureAvoidedUg > 0 && (
                 <p className="text-sm text-muted-foreground px-1">
-                  🕐 <span className="text-foreground font-medium">{result.exposureAvoidedUg} µg</span> {t("avoidedByTiming")}
+                  🌿 <span className="text-foreground font-medium">{result.exposureAvoidedUg} µg</span> {t("avoidedByTiming")}
                 </p>
               )}
             </motion.div>

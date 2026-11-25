@@ -201,7 +201,7 @@ const EN_STRINGS: UIStrings = {
   perWeek: "per week",
   noChange: "No change",
   naturalInfiltration: "Natural infiltration",
-  avoidedByTiming: "PM2.5 avoided by timing your activity",
+  avoidedByTiming: "PM2.5 avoided per day",
   adjustControls: "Adjust controls above to explore your impact",
   howWeCalculateBody:
     "Inhaled PM2.5 dose = concentration × minute-ventilation × duration (ICRP 1994 reference values). Air purifier: box model CADR 300 m³/h, 30 m³ room. CO₂: India MNRE 2023 factors. Cigarette-eq: Berkeley Earth (22 µg/m³ × 24h ≈ 1 cigarette). All figures are estimates based on stated assumptions.",
@@ -307,7 +307,7 @@ const HI_STRINGS: UIStrings = {
   perWeek: "प्रति सप्ताह",
   noChange: "कोई बदलाव नहीं",
   naturalInfiltration: "सामान्य वायु प्रवेश",
-  avoidedByTiming: "सही समय चुनने से PM2.5 से बचाव",
+  avoidedByTiming: "प्रति दिन टाला गया PM2.5",
   adjustControls: "अपना प्रभाव देखने के लिए ऊपर दिए नियंत्रण बदलें",
   howWeCalculateBody:
     "साँस में PM2.5 खुराक = सघनता × श्वसन दर × अवधि (ICRP 1994 मान)। एयर प्यूरीफायर: CADR 300 m³/h बॉक्स मॉडल, 30 m³ कमरा। CO₂: भारत MNRE 2023 कारक। सिगरेट-समकक्ष: बर्कले अर्थ (22 µg/m³ × 24 घंटे ≈ 1 सिगरेट)। सभी आंकड़े अनुमानित हैं।",
