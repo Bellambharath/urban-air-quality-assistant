@@ -265,10 +265,16 @@ describe("computePersonalDailyExposure", () => {
     expect(with_.optimizedUg).toBeLessThan(without.optimizedUg);
   });
 
-  it("cig equivalents are positive for non-zero PM2.5", () => {
+  it("cig equivalents are positive for non-zero PM2.5 and reconcile with doseUg", () => {
     const result = computePersonalDailyExposure(MOCK_PROFILE, MOCK_HOURLY_AQI);
     expect(result.baselineCigEq).toBeGreaterThan(0);
     expect(result.optimizedCigEq).toBeGreaterThan(0);
+    expect(result.baselineCigEq).toBe(
+      Math.round(doseUgToCigaretteEquivalent(result.baselineUg) * 10) / 10
+    );
+    expect(result.optimizedCigEq).toBe(
+      Math.round(doseUgToCigaretteEquivalent(result.optimizedUg) * 10) / 10
+    );
   });
 
   it("yields a meaningful, profile-driven percentage cut (> 15%, not flat 10%)", () => {

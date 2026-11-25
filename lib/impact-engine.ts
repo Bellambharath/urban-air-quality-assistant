@@ -399,14 +399,12 @@ export function computePersonalDailyExposureV2(
   }
 
   const pctCut = baselineUg > 0 ? Math.round(((baselineUg - optimizedUg) / baselineUg) * 100) : 0;
-  const meanBaselinePM25 = hourlyAQI.reduce((s, h) => s + h.pm25, 0) / hourlyAQI.length;
-  const meanOptimizedPM25 = meanBaselinePM25 * (1 - pctCut / 100);
 
   return {
     baselineUg: Math.round(baselineUg),
     optimizedUg: Math.round(optimizedUg),
     pctCut,
-    baselineCigEq: Math.round(toCigaretteEquivalent(meanBaselinePM25, 24) * 10) / 10,
-    optimizedCigEq: Math.round(toCigaretteEquivalent(meanOptimizedPM25, 24) * 10) / 10,
+    baselineCigEq: Math.round(doseUgToCigaretteEquivalent(baselineUg) * 10) / 10,
+    optimizedCigEq: Math.round(doseUgToCigaretteEquivalent(optimizedUg) * 10) / 10,
   };
 }

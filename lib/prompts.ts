@@ -18,9 +18,9 @@ export const PLAN_JSON_SCHEMA = `{
     {
       "id": "string — the EXACT id of the selected candidate — copy it verbatim, never invent one",
       "category": "routine | indoor | alternative",
-      "title": "string — short action title (max 8 words)",
-      "when": "string — specific time e.g. '2–4 PM today'",
-      "explanation": "string — 1–2 sentences, household-specific, mentions this family's profile details",
+      "title": "string — short action title (max 8 words, in the target language)",
+      "when": "string — specific time e.g. '2–4 PM today' (in the target language)",
+      "explanation": "string — 1–2 sentences, household-specific, mentions this family's profile details (in the target language)",
       "impact_metric": "pm25_exposure_avoided | co2_saved_kg | indoor_pm25_drop",
       "impact_value": 0,
       "impact_unit": "string e.g. 'µg' or 'kg' or '%'",
@@ -32,7 +32,7 @@ export const PLAN_JSON_SCHEMA = `{
 // ─── Plan pipeline system prompt (Stage 4) ───────────────────────────────────
 
 export function buildPlanSystemPrompt(locale: string = "en"): string {
-  const lang = locale === "hi" ? "Hindi" : locale === "kn" ? "Kannada" : "plain English";
+  const lang = locale === "hi" ? "Hindi (Devanagari script)" : "plain English";
   return `You are AirWise, a trusted air quality health assistant for Indian families.
 
 ## Your role
@@ -43,7 +43,7 @@ Select and explain 4–6 air quality recommendations for a specific household ba
 2. NEVER invent AQI numbers, PM2.5 values, CO₂ figures, or exposure amounts. The \`impact_value\` field MUST be set to 0 — the calling code will overwrite it with the real computed number.
 3. NEVER provide medical diagnoses, medication dosing, or clinical advice. For health conditions, provide general guidance and suggest consulting a doctor.
 4. Ground every explanation in the LIVE context object provided — specific AQI, specific household members, specific time of day.
-5. Write explanations in a calm, helpful tone. Do not use fear-mongering language. Write in ${lang}.
+5. Write title, when, and explanation in ${lang} in a calm, helpful tone. Do not use fear-mongering language.
 6. Rank recommendations by relevance to this household (not generic priority).
 7. Return ONLY valid JSON matching the schema. No markdown, no commentary outside the JSON object.
 
@@ -145,10 +145,10 @@ Commute: ${profile.commute.mode.replace("_", " ")} for ${profile.commute.distanc
 - NEVER diagnose health conditions, prescribe medication, or give clinical dosing advice. For medical questions, say "please consult your doctor" and give general guidance only.
 - Always reference the LIVE AQI and household context above when answering questions.
 - If the user asks about a time or tomorrow, note that forecast data may be limited depending on the data source.
-- Respond in ${profile.locale === "hi" ? "Hindi" : profile.locale === "kn" ? "Kannada" : "English"}.
+- Respond in ${profile.locale === "hi" ? "Hindi (Devanagari script)" : "English"}.
 
 ## Footer to include in every response
-_This is general guidance, not medical advice. Consult a doctor for health conditions._`;
+${profile.locale === "hi" ? "_यह केवल सामान्य मार्गदर्शन है, चिकित्सा सलाह नहीं। स्वास्थ्य समस्याओं के लिए डॉक्टर से परामर्श करें।_" : "_This is general guidance, not medical advice. Consult a doctor for health conditions._"}`;
 }
 
 // ─── Morning brief prompt ─────────────────────────────────────────────────────
@@ -163,5 +163,5 @@ PM2.5: ${snapshot.pm25} µg/m³
 Household: ${profile.household.adults} adults, ${profile.household.kids} kids, ${profile.household.elderly} elderly. Conditions: ${profile.household.conditions.join(", ") || "none"}.
 Dominant pollutant: ${snapshot.dominantPollutant}
 
-Write in ${profile.locale === "hi" ? "Hindi" : profile.locale === "kn" ? "Kannada" : "English"}. Keep it under 60 words. No markdown.`;
+Write in ${profile.locale === "hi" ? "Hindi (Devanagari script)" : "English"}. Keep it under 60 words. No markdown.`;
 }

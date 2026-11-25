@@ -7,20 +7,15 @@ import { ArrowLeft, Send, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useProfile } from "@/hooks/useProfile";
 import { useAQI } from "@/hooks/useAQI";
+import { useLocale, useT } from "@/lib/LocaleContext";
+import { getLocalizedBand } from "@/lib/cpcb-bands";
+import { CHAT_SUGGESTED_PROMPTS, translateCity } from "@/lib/i18n";
 import type { ChatMessage } from "@/lib/types";
-
-const SUGGESTED_PROMPTS = [
-  "Is it safe to walk my dog at 7 AM?",
-  "What mask should I wear outdoors today?",
-  "How is this air quality affecting my child?",
-  "When is the best time to ventilate my home?",
-  "What's the safest time for my morning run?",
-];
-
-const FRIENDLY_ERROR_MESSAGE = "Sorry, I couldn't get a response right now. Please try again.";
 
 export default function ChatPage() {
   const router = useRouter();
+  const { locale } = useLocale();
+  const t = useT();
   const { profile } = useProfile();
   const { snapshot } = useAQI(profile?.lat ?? null, profile?.lng ?? null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -31,6 +26,9 @@ export default function ChatPage() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  const suggestedPrompts =
+    locale === "hi" ? CHAT_SUGGESTED_PROMPTS.hi : CHAT_SUGGESTED_PROMPTS.en;
 
   const sendMessage = async (content: string) => {
     if (!content.trim() || !profile || !snapshot || isStreaming) return;
@@ -60,10 +58,13 @@ export default function ChatPage() {
           "Content-Type": "application/json",
           "Accept": "text/event-stream, application/json",
         },
-        body: JSON.stringify({ messages: updatedMessages, profile, aqiSnapshot: snapshot }),
+        body: JSON.stringify({
+          messages: updatedMessages,
+          profile: { ...profile, locale },
+          aqiSnapshot: snapshot,
+        }),
       });
 
-      // Handle non-200 responses cleanly
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.error || `HTTP ${res.status}`);
@@ -71,7 +72,6 @@ export default function ChatPage() {
 
       const contentType = res.headers.get("content-type") || "";
 
-      // If server returned application/json
       if (contentType.includes("application/json")) {
         const data = await res.json();
         if (data.error) throw new Error(data.error);
@@ -84,7 +84,6 @@ export default function ChatPage() {
         return;
       }
 
-      // If server returned SSE text/event-stream
       if (!res.body) throw new Error("No response body");
 
       const reader = res.body.getReader();
@@ -103,13 +102,12 @@ export default function ChatPage() {
             if (data === "[DONE]") break;
             try {
               const parsed = JSON.parse(data);
-              // Server-sent error event (e.g. data: {"error":"..."})
               if (parsed.error) {
                 hasError = true;
                 setMessages((prev) =>
                   prev.map((m) =>
                     m.id === assistantId
-                      ? { ...m, content: FRIENDLY_ERROR_MESSAGE }
+                      ? { ...m, content: t("chatError") }
                       : m
                   )
                 );
@@ -129,12 +127,11 @@ export default function ChatPage() {
         if (hasError) break;
       }
 
-      // If stream closed without producing text
       if (!hasError && !accumulated.trim()) {
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantId
-              ? { ...m, content: FRIENDLY_ERROR_MESSAGE }
+              ? { ...m, content: t("chatError") }
               : m
           )
         );
@@ -143,7 +140,7 @@ export default function ChatPage() {
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantId
-            ? { ...m, content: FRIENDLY_ERROR_MESSAGE }
+            ? { ...m, content: t("chatError") }
             : m
         )
       );
@@ -151,6 +148,8 @@ export default function ChatPage() {
       setIsStreaming(false);
     }
   };
+
+  const localizedBand = snapshot ? getLocalizedBand(snapshot.aqi, locale) : null;
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -160,10 +159,10 @@ export default function ChatPage() {
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <div>
-          <h1 className="font-semibold text-sm">AirWise Chat</h1>
-          {snapshot && (
+          <h1 className="font-semibold text-sm">{t("chatTitle")}</h1>
+          {snapshot && localizedBand && profile && (
             <p className="text-xs text-muted-foreground">
-              AQI {snapshot.aqi} · {snapshot.band.name} · {profile?.city}
+              AQI {snapshot.aqi} · {localizedBand.localizedName} · {translateCity(locale, profile.city)}
             </p>
           )}
         </div>
@@ -173,9 +172,9 @@ export default function ChatPage() {
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 pb-36">
         {messages.length === 0 && (
           <div className="text-center py-10 space-y-4">
-            <p className="text-muted-foreground text-sm">Ask me anything about today's air quality.</p>
+            <p className="text-muted-foreground text-sm">{t("chatEmptyHint")}</p>
             <div className="flex flex-col gap-2 items-center">
-              {SUGGESTED_PROMPTS.map((p) => (
+              {suggestedPrompts.map((p) => (
                 <button
                   key={p}
                   onClick={() => sendMessage(p)}
@@ -208,7 +207,7 @@ export default function ChatPage() {
                 ) : isStreaming && msg.role === "assistant" ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
-                  <p>{FRIENDLY_ERROR_MESSAGE}</p>
+                  <p>{t("chatError")}</p>
                 )}
               </div>
             </motion.div>
@@ -220,7 +219,7 @@ export default function ChatPage() {
       {/* Disclaimer */}
       <div className="px-4 py-1 text-center">
         <p className="text-[10px] text-muted-foreground">
-          General guidance only — not medical advice.
+          {t("chatDisclaimer")}
         </p>
       </div>
 
@@ -237,7 +236,7 @@ export default function ChatPage() {
                 sendMessage(input);
               }
             }}
-            placeholder="Ask about today's air quality…"
+            placeholder={t("chatPlaceholder")}
             className="flex-1 bg-muted/50 border border-border rounded-full px-4 py-2 text-sm outline-none focus:border-muted-foreground/50"
             disabled={isStreaming}
           />

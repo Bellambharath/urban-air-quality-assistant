@@ -7,11 +7,13 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { ArrowLeft, Check, Sparkles } from "lucide-react";
 import { SUPPORTED_CITIES } from "@/lib/constants";
-import { getBand } from "@/lib/cpcb-bands";
+import { getLocalizedBand, CPCB_BANDS } from "@/lib/cpcb-bands";
 import { useProfile } from "@/hooks/useProfile";
+import { useLocale, useT } from "@/lib/LocaleContext";
+import { translateCity } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -32,6 +34,8 @@ const STATIC_AQI: Record<string, number> = {
 
 export default function MapPage() {
   const router = useRouter();
+  const { locale } = useLocale();
+  const t = useT();
   const { profile, isLoaded, updateProfile } = useProfile();
 
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
@@ -85,11 +89,11 @@ export default function MapPage() {
   const sortedCities = [...SUPPORTED_CITIES].sort((a, b) => {
     const aqiA = getAQIForCity(a.name);
     const aqiB = getAQIForCity(b.name);
-    return aqiB - aqiA; // Worst (highest AQI) first
+    return aqiB - aqiA;
   });
 
   const activeCityAQI = getAQIForCity(activeCity);
-  const activeCityBand = getBand(activeCityAQI);
+  const activeCityBand = getLocalizedBand(activeCityAQI, locale);
   const isActiveLive = activeCity === profile?.city && liveAQI !== null;
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -105,17 +109,17 @@ export default function MapPage() {
             className="gap-1.5"
           >
             <ArrowLeft className="size-4" />
-            Dashboard
+            {t("backDashboard")}
           </Button>
           <h1 className="text-sm font-semibold tracking-tight text-center">
-            City AQI Comparison 🗺️
+            {t("mapTitle")}
           </h1>
-          <div className="w-20" /> {/* Spacer for centering */}
+          <div className="w-20" />
         </div>
       </header>
 
       <main className="flex flex-col items-center gap-6 px-4 py-6 max-w-3xl mx-auto">
-        {/* Dynamic Active City Header Strip — strictly matches active/highlighted city */}
+        {/* Dynamic Active City Header Strip */}
         <div className="w-full rounded-xl border border-border bg-card/60 p-4 text-center">
           {loadingAQI && activeCity === profile?.city ? (
             <Skeleton className="h-5 w-56 mx-auto" />
@@ -127,8 +131,8 @@ export default function MapPage() {
                   style={{ backgroundColor: activeCityBand.hex }}
                 />
                 <span className="text-muted-foreground">
-                  {isActiveLive ? "Live AQI" : "AQI"} for{" "}
-                  <strong className="text-foreground">{activeCity}</strong>:
+                  {isActiveLive ? t("liveAqiFor") : t("aqiFor")}{" "}
+                  <strong className="text-foreground">{translateCity(locale, activeCity)}</strong>:
                 </span>
                 <span
                   style={{ color: activeCityBand.hex }}
@@ -144,7 +148,7 @@ export default function MapPage() {
                     border: `1px solid ${activeCityBand.hex}44`,
                   }}
                 >
-                  {activeCityBand.name}
+                  {activeCityBand.localizedName}
                 </span>
               </div>
 
@@ -153,11 +157,11 @@ export default function MapPage() {
                   onClick={() => handleSetCityAndNavigate(activeCity)}
                   className="text-xs text-primary hover:underline font-medium cursor-pointer ml-1"
                 >
-                  Switch to {activeCity} & view dashboard →
+                  {t("switchToCity")} {translateCity(locale, activeCity)} →
                 </button>
               ) : (
                 <span className="text-xs text-muted-foreground/80">
-                  (Your current city)
+                  {t("yourCurrentCity")}
                 </span>
               )}
             </div>
@@ -165,7 +169,7 @@ export default function MapPage() {
 
           {aqiError && activeCity === profile?.city && (
             <p className="text-xs text-destructive mt-1">
-              Could not refresh live station: {aqiError} (showing baseline estimate)
+              {t("error")}: {aqiError}
             </p>
           )}
         </div>
@@ -173,21 +177,21 @@ export default function MapPage() {
         {/* Section Heading */}
         <div className="w-full flex items-center justify-between">
           <div>
-            <h2 className="text-base font-semibold">10-City Comparison Grid</h2>
+            <h2 className="text-base font-semibold">{t("cityComparisonGrid")}</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              CPCB National Ambient Air Quality Standard · Sorted worst to best
+              {t("cpcbStandardSubtitle")}
             </p>
           </div>
           <span className="text-xs text-muted-foreground bg-muted/60 px-2.5 py-1 rounded-full border border-border">
-            Worst → Best
+            {t("worstToBest")}
           </span>
         </div>
 
-        {/* Clean Worst-to-Best Comparison Grid (No hand-drawn boundary) */}
+        {/* Clean Worst-to-Best Comparison Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 w-full">
           {sortedCities.map((city, index) => {
             const aqi = getAQIForCity(city.name);
-            const band = getBand(aqi);
+            const band = getLocalizedBand(aqi, locale);
             const isUserCity = profile?.city === city.name;
             const isActive = activeCity === city.name;
             const isLive = isUserCity && liveAQI !== null;
@@ -212,12 +216,12 @@ export default function MapPage() {
                   <div className="flex items-center gap-2">
                     <span
                       className="text-xs font-bold text-muted-foreground w-4 tabular-nums"
-                      title={`Rank #${index + 1}`}
+                      title={`#${index + 1}`}
                     >
                       #{index + 1}
                     </span>
                     <span className="font-semibold text-base text-foreground">
-                      {city.name}
+                      {translateCity(locale, city.name)}
                     </span>
                   </div>
 
@@ -225,12 +229,12 @@ export default function MapPage() {
                     {isUserCity && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 border border-primary/30 px-2 py-0.5 text-[11px] font-medium text-primary">
                         <Check className="size-3" />
-                        Your City {isLive ? "· Live" : ""}
+                        {t("yourCityLabel")} {isLive ? `· ${t("liveLabel")}` : ""}
                       </span>
                     )}
                     {isActive && !isUserCity && (
                       <span className="rounded-full bg-muted border border-border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                        Selected
+                        {t("selectedLabel")}
                       </span>
                     )}
                   </div>
@@ -258,13 +262,13 @@ export default function MapPage() {
                       border: `1px solid ${band.hex}40`,
                     }}
                   >
-                    {band.name}
+                    {band.localizedName}
                   </span>
                 </div>
 
                 {/* Advisory guidance */}
                 <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">
-                  {band.advice}
+                  {band.localizedAdvice}
                 </p>
 
                 {/* Action button on active card */}
@@ -284,7 +288,7 @@ export default function MapPage() {
                       }}
                     >
                       <Sparkles className="size-3.5" />
-                      Set as my city & view dashboard →
+                      {t("setAsMyCity")}
                     </Button>
                   </motion.div>
                 )}
@@ -295,22 +299,17 @@ export default function MapPage() {
 
         {/* Legend */}
         <div className="w-full rounded-xl border border-border bg-card/40 p-4 text-xs text-muted-foreground">
-          <p className="font-semibold text-foreground mb-2">CPCB AQI Scale Reference</p>
+          <p className="font-semibold text-foreground mb-2">{t("cpcbScaleRef")}</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {[
-              { name: "Good (0–50)", hex: "#22c55e" },
-              { name: "Satisfactory (51–100)", hex: "#a3e635" },
-              { name: "Moderate (101–200)", hex: "#facc15" },
-              { name: "Poor (201–300)", hex: "#f97316" },
-              { name: "Very Poor (301–400)", hex: "#ef4444" },
-              { name: "Severe (401–500)", hex: "#7f1d1d" },
-            ].map((item) => (
-              <div key={item.name} className="flex items-center gap-2">
+            {CPCB_BANDS.map((b) => (
+              <div key={b.name} className="flex items-center gap-2">
                 <span
                   className="w-2.5 h-2.5 rounded-full shrink-0"
-                  style={{ backgroundColor: item.hex }}
+                  style={{ backgroundColor: b.hex }}
                 />
-                <span className="text-[11px] truncate">{item.name}</span>
+                <span className="text-[11px] truncate">
+                  {locale === "hi" ? b.nameHi : b.name} ({b.range[0]}–{b.range[1]})
+                </span>
               </div>
             ))}
           </div>

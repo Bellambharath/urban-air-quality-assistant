@@ -91,9 +91,6 @@ async function generateMorningBriefWithTimeout(
   aqiSnapshot: AQISnapshot,
   timeoutMs = 3000
 ): Promise<string | undefined> {
-  const hour = new Date().getHours();
-  if (hour < 5 || hour > 11) return undefined;
-
   const timeoutPromise = new Promise<undefined>((resolve) =>
     setTimeout(() => resolve(undefined), timeoutMs)
   );
@@ -164,7 +161,7 @@ export async function POST(request: NextRequest) {
   // ── Stage 5: Overwrite impact_value from Impact Engine ────────────────────
   // Drops unrecognised IDs; falls back to top scored candidates if < 4 valid items;
   // guarantees impact numbers come strictly from the engine, never the model.
-  const planItems: PlanItem[] = buildPlanItems(geminiItems, scoredCandidates);
+  const planItems: PlanItem[] = buildPlanItems(geminiItems, scoredCandidates, profile.locale);
 
   const response: PlanResponse = {
     items: planItems,

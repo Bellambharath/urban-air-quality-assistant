@@ -3,7 +3,7 @@
 /**
  * lib/LocaleContext.tsx
  *
- * React context for the active UI locale.
+ * React context for the active UI locale (English / Hindi).
  * Syncs with the user's saved profile locale and persists changes via saveProfile.
  */
 
@@ -31,17 +31,18 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
   const { profile } = useProfile();
   const [locale, setLocaleState] = useState<Locale>("en");
 
-  // Sync locale from profile when it loads / changes
+  // Sync locale from profile when it loads / changes (normalize legacy kn -> en)
   useEffect(() => {
     if (profile?.locale) {
-      setLocaleState(profile.locale as Locale);
+      setLocaleState(profile.locale === "hi" ? "hi" : "en");
     }
   }, [profile?.locale]);
 
   function handleSetLocale(newLocale: Locale) {
-    setLocaleState(newLocale);
+    const normalized: Locale = newLocale === "hi" ? "hi" : "en";
+    setLocaleState(normalized);
     if (profile) {
-      saveProfile({ ...profile, locale: newLocale, updatedAt: new Date().toISOString() });
+      saveProfile({ ...profile, locale: normalized, updatedAt: new Date().toISOString() });
     }
   }
 

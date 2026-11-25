@@ -3,29 +3,15 @@
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, FlaskConical, Wind, Car, Train, Bus, Bike, Home, Loader2 } from "lucide-react";
+import { ArrowLeft, FlaskConical, Wind, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getBand } from "@/lib/cpcb-bands";
+import { getLocalizedBand } from "@/lib/cpcb-bands";
+import { useLocale, useT } from "@/lib/LocaleContext";
+import { formatLocalizedHour } from "@/lib/i18n";
 import type { CommuteModeType, SimulateResult } from "@/lib/types";
 import { useProfile } from "@/hooks/useProfile";
 import { useAQI } from "@/hooks/useAQI";
-
-// ─── Helpers ───────────────────────────────────────────────────────────────────
-
-function formatHour(h: number): string {
-  if (h === 0 || h === 24) return "12:00 AM";
-  if (h === 12) return "12:00 PM";
-  return h < 12 ? `${h}:00 AM` : `${h - 12}:00 PM`;
-}
-
-const COMMUTE_MODES: { mode: CommuteModeType; label: string; emoji: string }[] = [
-  { mode: "metro", label: "Metro", emoji: "🚇" },
-  { mode: "bus", label: "Bus", emoji: "🚌" },
-  { mode: "bike", label: "Bike", emoji: "🚲" },
-  { mode: "wfh", label: "WFH", emoji: "🏠" },
-  { mode: "car_petrol", label: "Car", emoji: "🚗" },
-];
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
 
@@ -51,6 +37,8 @@ function MetricCard({ label, value, sub, hidden }: MetricCardProps) {
 
 export default function SimulatePage() {
   const router = useRouter();
+  const { locale } = useLocale();
+  const t = useT();
   const { profile, isLoaded } = useProfile();
   const { snapshot } = useAQI(
     profile?.lat ?? null,
@@ -65,6 +53,14 @@ export default function SimulatePage() {
   const [result, setResult] = useState<SimulateResult | null>(null);
   const [computing, setComputing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const commuteModes: { mode: CommuteModeType; label: string; emoji: string }[] = [
+    { mode: "metro", label: locale === "hi" ? "मेट्रो" : "Metro", emoji: "🚇" },
+    { mode: "bus", label: locale === "hi" ? "बस" : "Bus", emoji: "🚌" },
+    { mode: "bike", label: locale === "hi" ? "बाइक" : "Bike", emoji: "🚲" },
+    { mode: "wfh", label: locale === "hi" ? "घर से काम" : "WFH", emoji: "🏠" },
+    { mode: "car_petrol", label: locale === "hi" ? "कार" : "Car", emoji: "🚗" },
+  ];
 
   // Initialise commute mode from profile once loaded
   useEffect(() => {
@@ -149,7 +145,7 @@ export default function SimulatePage() {
 
   // ── AQI at selected hour ───────────────────────────────────────────────────
   const hourlyAQI = snapshot?.forecast.find((h) => h.hour === activityHour)?.aqi;
-  const hourBand = hourlyAQI != null ? getBand(hourlyAQI) : null;
+  const hourBand = hourlyAQI != null ? getLocalizedBand(hourlyAQI, locale) : null;
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -161,13 +157,13 @@ export default function SimulatePage() {
             variant="ghost"
             size="icon-sm"
             onClick={() => router.push("/dashboard")}
-            aria-label="Back to dashboard"
+            aria-label={t("backDashboard")}
           >
             <ArrowLeft className="size-4" />
           </Button>
           <div className="flex items-center gap-2">
             <FlaskConical className="size-5 text-primary" />
-            <h1 className="font-semibold text-sm">What-If Simulator</h1>
+            <h1 className="font-semibold text-sm">{t("whatIfTitle")}</h1>
           </div>
         </div>
       </nav>
@@ -177,16 +173,16 @@ export default function SimulatePage() {
 
         {/* Controls card */}
         <div className="bg-card border border-border rounded-xl p-5 space-y-5">
-          <h2 className="font-semibold text-base">Explore your impact</h2>
+          <h2 className="font-semibold text-base">{t("exploreImpact")}</h2>
 
           {/* Toggle: Air purifier */}
           <div className="flex items-center justify-between gap-4">
             <div className="flex-1 min-w-0">
               <p className="font-medium text-sm">
-                {profile?.home?.hasPurifier ? "Run air purifier" : "Add an air purifier"}
+                {profile?.home?.hasPurifier ? t("runPurifier") : t("addPurifier")}
               </p>
               <p className="text-muted-foreground text-xs mt-0.5">
-                95% PM2.5 filtration (CADR 300 m³/h)
+                {t("purifierSub")}
               </p>
             </div>
             <button
@@ -207,9 +203,9 @@ export default function SimulatePage() {
 
           {/* Commute mode pills */}
           <div>
-            <p className="text-sm font-medium mb-2">Commute mode</p>
+            <p className="text-sm font-medium mb-2">{t("commuteMode")}</p>
             <div className="flex gap-2 flex-wrap">
-              {COMMUTE_MODES.map(({ mode, label, emoji }) => (
+              {commuteModes.map(({ mode, label, emoji }) => (
                 <button
                   key={mode}
                   onClick={() => setCommuteMode(mode)}
@@ -228,7 +224,7 @@ export default function SimulatePage() {
 
           {/* Activity hour slider */}
           <div className="space-y-2">
-            <p className="text-sm font-medium">Outdoor activity hour</p>
+            <p className="text-sm font-medium">{t("activityHour")}</p>
             <input
               type="range"
               min={5}
@@ -237,20 +233,20 @@ export default function SimulatePage() {
               value={activityHour}
               onChange={(e) => setActivityHour(Number(e.target.value))}
               className="w-full accent-primary h-2 rounded-full cursor-pointer"
-              aria-label="Outdoor activity hour"
+              aria-label={t("activityHour")}
             />
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">{formatHour(activityHour)}</span>
+              <span className="font-medium text-foreground">{formatLocalizedHour(activityHour, locale)}</span>
               <span>
                 {snapshot
                   ? hourlyAQI != null
                     ? (
                         <span className={hourBand?.color}>
-                          AQI {hourlyAQI} · {hourBand?.name}
+                          AQI {hourlyAQI} · {hourBand?.localizedName}
                         </span>
                       )
                     : "AQI: —"
-                  : "Loading…"}
+                  : t("loading")}
               </span>
             </div>
           </div>
@@ -258,8 +254,10 @@ export default function SimulatePage() {
           {/* Activity duration */}
           <div className="space-y-2">
             <div className="flex justify-between">
-              <p className="text-sm font-medium">Activity duration</p>
-              <span className="text-xs text-muted-foreground font-medium">{activityDurationMin} min</span>
+              <p className="text-sm font-medium">{t("activityDuration")}</p>
+              <span className="text-xs text-muted-foreground font-medium">
+                {activityDurationMin} {t("minUnit")}
+              </span>
             </div>
             <input
               type="range"
@@ -269,7 +267,7 @@ export default function SimulatePage() {
               value={activityDurationMin}
               onChange={(e) => setActivityDurationMin(Number(e.target.value))}
               className="w-full accent-primary h-2 rounded-full cursor-pointer"
-              aria-label="Activity duration in minutes"
+              aria-label={t("activityDuration")}
             />
           </div>
         </div>
@@ -313,37 +311,37 @@ export default function SimulatePage() {
               {result.pctExposureCut > 0 && (
                 <div className="inline-flex items-center gap-1.5 rounded-full bg-green-500/20 px-3 py-1 text-green-400 text-sm font-bold">
                   <Wind className="size-3.5" />
-                  {result.pctExposureCut}% dose cut
+                  {result.pctExposureCut}% {t("doseCut")}
                 </div>
               )}
 
               <div className="grid grid-cols-2 gap-3">
                 <MetricCard
-                  label="Indoor PM2.5"
+                  label={t("indoorPm25Label")}
                   value={`${result.indoorPM25After} µg`}
-                  sub={result.pctIndoorDrop > 0 ? `↓${result.pctIndoorDrop}%` : "No change"}
+                  sub={result.pctIndoorDrop > 0 ? `↓${result.pctIndoorDrop}%` : t("noChange")}
                 />
                 <MetricCard
-                  label="CO₂ saved"
+                  label={t("co2SavedLabel")}
                   value={`${result.co2SavedKgWeek} kg`}
-                  sub="per week"
+                  sub={t("perWeek")}
                   hidden={result.co2SavedKgWeek === 0}
                 />
                 <MetricCard
-                  label="Baseline"
+                  label={t("baseline")}
                   value={`${result.baselineCigEq.toFixed(1)} 🚬`}
-                  sub="cigarette-eq"
+                  sub={t("cigaretteEq")}
                 />
                 <MetricCard
-                  label="Optimized"
+                  label={t("optimized")}
                   value={`${result.optimizedCigEq.toFixed(1)} 🚬`}
-                  sub="cigarette-eq"
+                  sub={t("cigaretteEq")}
                 />
               </div>
 
               {result.exposureAvoidedUg > 0 && (
                 <p className="text-sm text-muted-foreground px-1">
-                  🕐 <span className="text-foreground font-medium">{result.exposureAvoidedUg} µg</span> PM2.5 avoided by timing your activity
+                  🕐 <span className="text-foreground font-medium">{result.exposureAvoidedUg} µg</span> {t("avoidedByTiming")}
                 </p>
               )}
             </motion.div>
@@ -355,7 +353,7 @@ export default function SimulatePage() {
               exit={{ opacity: 0 }}
               className="text-muted-foreground text-sm text-center py-8"
             >
-              Adjust controls above to explore your impact
+              {t("adjustControls")}
             </motion.p>
           )}
         </AnimatePresence>
@@ -364,15 +362,11 @@ export default function SimulatePage() {
         <details className="rounded-xl border border-border bg-card/40 overflow-hidden">
           <summary className="cursor-pointer px-5 py-3 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors select-none list-none flex items-center gap-2">
             <span>📐</span>
-            How we calculate this
+            {t("howWeCalculate")}
           </summary>
           <div className="px-5 pb-4 pt-1">
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Inhaled PM2.5 dose = concentration × minute-ventilation × duration (ICRP 1994 reference values).
-              Air purifier: box model CADR 300 m³/h, 30 m³ room.
-              CO₂: India MNRE 2023 factors.
-              Cigarette-eq: Berkeley Earth (22 µg/m³ × 24h ≈ 1 cigarette).
-              All figures are estimates based on stated assumptions.
+              {t("howWeCalculateBody")}
             </p>
           </div>
         </details>
@@ -380,7 +374,7 @@ export default function SimulatePage() {
         {/* Footer disclaimer */}
         <footer className="text-center pb-4">
           <p className="text-xs text-muted-foreground/60">
-            AirWise estimates are for informational purposes only and do not constitute medical advice.
+            {t("disclaimer")}
           </p>
         </footer>
       </main>

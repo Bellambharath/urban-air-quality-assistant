@@ -303,4 +303,32 @@ describe("Stage 5 Plan Reconciliation (buildPlanItems)", () => {
       expect(n95.impact_value).toBeGreaterThan(0);
     }
   });
+
+  it("localizes candidate titles, when, and fallback explanations when locale is hi", () => {
+    const profile = { ...createDefaultProfile(), city: "Delhi", locale: "hi" as const };
+    const snapshot: AQISnapshot = {
+      aqi: 260,
+      band: getBand(260),
+      dominantPollutant: "pm25",
+      pm25: 130,
+      pm10: 190,
+      healthRecs: { generalPopulation: "Wear mask" },
+      forecast: [],
+      history: [],
+      fetchedAt: new Date().toISOString(),
+      source: "WAQI",
+      lat: 28.6139,
+      lng: 77.2090,
+      city: "Delhi",
+    };
+
+    const candidates = selectAndScoreCandidates(profile, snapshot);
+    const result = buildPlanItems([], candidates, "hi");
+    expect(result.length).toBeGreaterThanOrEqual(4);
+    for (const item of result) {
+      expect(/[\u0900-\u097F]/.test(item.title)).toBe(true);
+      expect(/[\u0900-\u097F]/.test(item.when)).toBe(true);
+      expect(/[\u0900-\u097F]/.test(item.explanation)).toBe(true);
+    }
+  });
 });

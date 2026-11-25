@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { motion, useMotionValue, useTransform, animate } from "framer-motion";
-import { CPCB_BANDS, getBand, getBandHex } from "@/lib/cpcb-bands";
+import { CPCB_BANDS, getLocalizedBand, getBandHex } from "@/lib/cpcb-bands";
+import { useLocale } from "@/lib/LocaleContext";
 import { cn } from "@/lib/utils";
 
 interface AQIGaugeProps {
@@ -33,12 +34,13 @@ function describeArc(cx: number, cy: number, r: number, startDeg: number, endDeg
 const BANDS = CPCB_BANDS.map((b) => ({ max: b.range[1], color: b.hex }));
 
 export function AQIGauge({ aqi, pm25, size = 220, className }: AQIGaugeProps) {
+  const { locale } = useLocale();
   const cx = size / 2;
   const cy = size / 2;
   const r  = size * 0.4;
   const strokeW = size * 0.065;
 
-  const band = getBand(aqi);
+  const band = getLocalizedBand(aqi, locale);
   const hex  = getBandHex(aqi);
 
   // Animated needle value
@@ -72,7 +74,7 @@ export function AQIGauge({ aqi, pm25, size = 220, className }: AQIGaugeProps) {
         width={size}
         height={size * 0.72}
         viewBox={`0 0 ${size} ${size}`}
-        aria-label={`AQI gauge: ${aqi}, ${band.name}`}
+        aria-label={`AQI gauge: ${aqi}, ${band.localizedName}`}
       >
         {/* Background track */}
         <path
@@ -130,7 +132,7 @@ export function AQIGauge({ aqi, pm25, size = 220, className }: AQIGaugeProps) {
           fill={hex}
           opacity={0.9}
         >
-          {band.name}
+          {band.localizedName}
         </text>
 
         {/* PM2.5 label */}
@@ -165,7 +167,7 @@ export function AQIGauge({ aqi, pm25, size = 220, className }: AQIGaugeProps) {
 
       {/* Meaning text below gauge */}
       <p className="text-xs text-muted-foreground text-center mt-1 px-4 leading-snug">
-        {band.meaning}
+        {band.localizedMeaning}
       </p>
     </div>
   );

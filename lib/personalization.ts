@@ -21,6 +21,7 @@ import {
   INDOOR_UNFILTERED_RATIO,
 } from "./constants";
 import { getBand } from "./cpcb-bands";
+import { ACTION_TRANSLATIONS_HI } from "./i18n";
 
 // ─── Candidate action catalog ─────────────────────────────────────────────────
 
@@ -425,9 +426,12 @@ function computeRelevanceScore(action: CandidateAction, profile: Profile, aqi: n
  */
 export function buildPlanItems(
   geminiItems: Array<Partial<PlanItem> & { id?: string }>,
-  scoredCandidates: ScoredCandidate[]
+  scoredCandidates: ScoredCandidate[],
+  locale: string = "en"
 ): PlanItem[] {
   const candidateMap = new Map(scoredCandidates.map((c) => [c.id, c]));
+  const isHi = locale === "hi";
+  const hasDevanagari = (str?: string) => Boolean(str && /[\u0900-\u097F]/.test(str));
 
   // (b) Drop any returned item whose id isn't in impactLookup / candidateMap
   const validGeminiItems = (geminiItems || []).filter(
@@ -450,15 +454,18 @@ export function buildPlanItems(
     const topCandidates = scoredCandidates.slice(0, targetCount);
 
     baseItems = topCandidates.map((candidate) => {
+      const hiTrans = isHi ? ACTION_TRANSLATIONS_HI[candidate.id] : undefined;
+      const modelExpl = explanationMap.get(candidate.id);
       const explanation =
-        explanationMap.get(candidate.id) ||
-        `${candidate.title} is recommended for your household based on today's air quality.`;
+        isHi
+          ? (hasDevanagari(modelExpl) ? modelExpl! : hiTrans?.explanation ?? `${candidate.title} आपके घर की वायु गुणवत्ता के लिए सुझाया गया है।`)
+          : (modelExpl || `${candidate.title} is recommended for your household based on today's air quality.`);
 
       return {
         id: candidate.id,
         category: candidate.category,
-        title: candidate.title,
-        when: candidate.when,
+        title: hiTrans ? hiTrans.title : candidate.title,
+        when: hiTrans ? hiTrans.when : candidate.when,
         explanation,
         impact_metric: candidate.impact_metric,
         impact_value: candidate.impact_value,
@@ -469,12 +476,26 @@ export function buildPlanItems(
   } else {
     baseItems = validGeminiItems.map((item) => {
       const candidate = candidateMap.get(item.id)!;
+      const hiTrans = isHi ? ACTION_TRANSLATIONS_HI[candidate.id] : undefined;
+
+      const title = isHi
+        ? (hasDevanagari(item.title) ? item.title! : hiTrans?.title ?? candidate.title)
+        : (item.title || candidate.title);
+
+      const when = isHi
+        ? (hasDevanagari(item.when) ? item.when! : hiTrans?.when ?? candidate.when)
+        : (item.when || candidate.when);
+
+      const explanation = isHi
+        ? (hasDevanagari(item.explanation) ? item.explanation! : hiTrans?.explanation ?? `${title} आपके घर के लिए सुझाया गया है।`)
+        : (item.explanation || `${candidate.title} is recommended for your household.`);
+
       return {
         id: candidate.id,
         category: candidate.category,
-        title: item.title || candidate.title,
-        when: item.when || candidate.when,
-        explanation: item.explanation || `${candidate.title} is recommended for your household.`,
+        title,
+        when,
+        explanation,
         impact_metric: candidate.impact_metric,
         impact_value: candidate.impact_value,
         impact_unit: candidate.impact_unit,

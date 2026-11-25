@@ -6,6 +6,8 @@ import { ChevronDown, ChevronUp, Leaf, Wind, Car, Info } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { useLocale, useT } from "@/lib/LocaleContext";
+import { translateImpactUnit } from "@/lib/i18n";
 import type { PlanItem } from "@/lib/types";
 
 interface PlanCardProps {
@@ -19,17 +21,22 @@ const CATEGORY_ICONS = {
   alternative: Car,
 };
 
-const EFFORT_LABELS = {
-  low: "Easy",
-  medium: "Moderate",
-  high: "Effort needed",
-};
-
 export function PlanCard({ item, index }: PlanCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const { locale } = useLocale();
+  const t = useT();
   const Icon = CATEGORY_ICONS[item.category];
 
   const hasImpact = item.impact_value > 0;
+
+  const effortLabel =
+    item.effort === "low"
+      ? t("effortLow")
+      : item.effort === "medium"
+      ? t("effortMedium")
+      : t("effortHigh");
+
+  const localizedUnit = translateImpactUnit(locale, item.impact_unit);
 
   return (
     <motion.div
@@ -64,7 +71,7 @@ export function PlanCard({ item, index }: PlanCardProps) {
               <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                 <span className="text-xs text-muted-foreground">{item.when}</span>
                 <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                  {EFFORT_LABELS[item.effort]}
+                  {effortLabel}
                 </Badge>
               </div>
 
@@ -72,10 +79,10 @@ export function PlanCard({ item, index }: PlanCardProps) {
               {hasImpact && (
                 <div className="mt-2 inline-flex items-center gap-1 bg-green-500/10 border border-green-500/20 text-green-400 rounded px-2 py-0.5 text-xs font-medium">
                   <Leaf className="w-3 h-3" />
-                  {item.impact_value} {item.impact_unit}
+                  {item.impact_value} {localizedUnit}
                   {item.impact_cig_eq != null && item.impact_cig_eq > 0.05 && (
                     <span className="opacity-70 ml-1">
-                      · ≈{item.impact_cig_eq.toFixed(1)} cig-eq avoided
+                      · ≈{item.impact_cig_eq.toFixed(1)} {t("cigEqAvoided")}
                     </span>
                   )}
                 </div>
@@ -101,11 +108,10 @@ export function PlanCard({ item, index }: PlanCardProps) {
                     className="flex items-center gap-1 text-[11px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
                     onClick={(e) => {
                       e.stopPropagation();
-                      // TODO: open calculation explainer modal
                     }}
                   >
                     <Info className="w-3 h-3" />
-                    How we calculate this
+                    {t("howWeCalculate")}
                   </button>
                 </div>
               </motion.div>

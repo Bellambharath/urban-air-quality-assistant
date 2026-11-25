@@ -1,12 +1,19 @@
 "use client";
+
 import { useMemo } from "react";
 import { motion } from "framer-motion";
 import { computePersonalDailyExposureV2 } from "@/lib/impact-engine";
+import { useT } from "@/lib/LocaleContext";
 import type { Profile, AQISnapshot } from "@/lib/types";
 
-interface Props { profile: Profile; snapshot: AQISnapshot; }
+interface Props {
+  profile: Profile;
+  snapshot: AQISnapshot;
+}
 
 export function ExposureMeter({ profile, snapshot }: Props) {
+  const t = useT();
+
   const result = useMemo(
     () => computePersonalDailyExposureV2(profile, snapshot.forecast),
     [profile, snapshot.forecast]
@@ -15,7 +22,7 @@ export function ExposureMeter({ profile, snapshot }: Props) {
   if (snapshot.forecast.length === 0) {
     return (
       <div className="bg-card border border-border rounded-xl p-4 text-center text-sm text-muted-foreground">
-        Connect forecast data for personalised exposure meter
+        {t("connectForecast")}
       </div>
     );
   }
@@ -27,40 +34,40 @@ export function ExposureMeter({ profile, snapshot }: Props) {
       className="bg-card border border-border rounded-xl p-5 space-y-4"
     >
       <div>
-        <h2 className="text-sm font-semibold">Personal Exposure Meter</h2>
+        <h2 className="text-sm font-semibold">{t("exposureMeterTitle")}</h2>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Estimated inhaled PM2.5 — your routine vs AirWise-optimised
+          {t("exposureMeterSubtitle")}
         </p>
       </div>
 
       {/* Headline */}
       <div className="text-center">
         <span className="inline-block bg-green-500/15 text-green-400 text-lg font-bold px-4 py-1.5 rounded-full">
-          Optimise → {result.pctCut}% less inhaled PM2.5 today
+          {t("optimisePrefix")} {result.pctCut}% {t("lessInhaledToday")}
         </span>
       </div>
 
       {/* Two columns */}
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-muted/40 rounded-xl p-4 text-center space-y-1">
-          <p className="text-xs text-muted-foreground font-medium">Your routine</p>
+          <p className="text-xs text-muted-foreground font-medium">{t("yourRoutine")}</p>
           <p className="text-2xl font-bold">{result.baselineUg.toLocaleString()}</p>
-          <p className="text-xs text-muted-foreground">µg PM2.5</p>
-          <p className="text-sm">🚬 {result.baselineCigEq} cig-eq</p>
+          <p className="text-xs text-muted-foreground">{t("ugPm25")}</p>
+          <p className="text-sm">🚬 {result.baselineCigEq} {t("cigEqShort")}</p>
         </div>
         <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4 text-center space-y-1">
-          <p className="text-xs text-green-400 font-medium">With AirWise</p>
+          <p className="text-xs text-green-400 font-medium">{t("withAirWise")}</p>
           <p className="text-2xl font-bold text-green-400">{result.optimizedUg.toLocaleString()}</p>
-          <p className="text-xs text-green-400/70">µg PM2.5</p>
-          <p className="text-sm">🚬 {result.optimizedCigEq} cig-eq</p>
+          <p className="text-xs text-green-400/70">{t("ugPm25")}</p>
+          <p className="text-sm">🚬 {result.optimizedCigEq} {t("cigEqShort")}</p>
         </div>
       </div>
 
       {/* Bar comparison */}
       <div className="space-y-1">
         <div className="flex justify-between text-xs text-muted-foreground">
-          <span>Baseline</span>
-          <span>Optimized</span>
+          <span>{t("baseline")}</span>
+          <span>{t("optimized")}</span>
         </div>
         <div className="relative h-2 bg-muted rounded-full overflow-hidden">
           <div className="absolute inset-y-0 left-0 bg-orange-400 rounded-full" style={{ width: "100%" }} />
@@ -74,7 +81,7 @@ export function ExposureMeter({ profile, snapshot }: Props) {
       </div>
 
       <p className="text-[10px] text-muted-foreground text-center">
-        Estimates based on ICRP minute-ventilation values, CADR box model, and stated household profile. Not measured exposure.
+        {t("exposureMeterFootnote")}
       </p>
     </motion.div>
   );
