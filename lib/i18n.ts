@@ -49,6 +49,12 @@ export interface UIStrings {
   goodLegend: string;
   moderateLegend: string;
   poorPlusLegend: string;
+  cleanestWindow: string;
+  noCleanWindowVeryPoor: string;
+  airStaysPoor: string;
+  bestHoursLegend: string;
+  leastBadHoursLegend: string;
+  nowLabel: string;
   // PlanTomorrowCard
   planTomorrow: string;
   noForecastYet: string;
@@ -147,6 +153,12 @@ const EN_STRINGS: UIStrings = {
   goodLegend: "Good (0–50)",
   moderateLegend: "Moderate (101–200)",
   poorPlusLegend: "Poor+",
+  cleanestWindow: "Cleanest:",
+  noCleanWindowVeryPoor: "No clean window today — air stays Very Poor; keep outdoor time short",
+  airStaysPoor: "Air stays Poor today — least polluted:",
+  bestHoursLegend: "Best hours",
+  leastBadHoursLegend: "Least-bad hours",
+  nowLabel: "Now",
   // PlanTomorrowCard
   planTomorrow: "Plan Tomorrow 📅",
   noForecastYet: "No forecast available yet.",
@@ -247,6 +259,12 @@ const HI_STRINGS: UIStrings = {
   goodLegend: "अच्छा (0–50)",
   moderateLegend: "मध्यम (101–200)",
   poorPlusLegend: "खराब+",
+  cleanestWindow: "सबसे साफ़ समय:",
+  noCleanWindowVeryPoor: "आज कोई सुरक्षित समय नहीं — हवा बहुत खराब रहेगी; बाहर कम समय बिताएं",
+  airStaysPoor: "आज हवा खराब रहेगी — अपेक्षाकृत कम प्रदूषित:",
+  bestHoursLegend: "बेहतर घंटे",
+  leastBadHoursLegend: "कम प्रदूषित घंटे",
+  nowLabel: "अभी",
   // PlanTomorrowCard
   planTomorrow: "कल की योजना 📅",
   noForecastYet: "अभी पूर्वानुमान उपलब्ध नहीं है।",
