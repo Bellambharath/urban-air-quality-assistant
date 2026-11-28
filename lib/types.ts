@@ -6,7 +6,7 @@
  */
 
 import type { CPCBBand } from "./cpcb-bands";
-import type { ActivityLevel, CityName } from "./constants";
+import type { CityName } from "./constants";
 
 // ─── AQI Data ──────────────────────────────────────────────────────────────────
 
@@ -80,7 +80,7 @@ export interface Profile {
   household: HouseholdProfile;
   home: HomeProfile;
   commute: CommuteProfile;
-  locale: "en" | "hi" | "kn";   // language preference
+  locale: "en" | "hi";          // language preference
   createdAt: string;
   updatedAt: string;
 }
@@ -100,9 +100,7 @@ export interface PlanItem {
   impact_metric: ImpactMetric;
   impact_value: number;           // SET BY IMPACT ENGINE — never by the model
   impact_unit: string;
-  impact_cig_eq?: number;         // cigarette-equivalent (always computed)
   effort: EffortLevel;
-  checklistItem?: boolean;
 }
 
 export interface PlanResponse {
@@ -151,14 +149,4 @@ export interface DailyExposureResult {
   pctCut: number;
   baselineCigEq: number;
   optimizedCigEq: number;
-}
-
-export interface PersonalizedDoseBlock {
-  label: string;
-  startHour: number;
-  endHour: number;
-  activity: ActivityLevel;
-  isOutdoor: boolean;
-  pm25: number;
-  doseUg: number;
 }

@@ -133,18 +133,6 @@ export function getLocalizedBand(aqi: number, locale: string = "en") {
   };
 }
 
-export function getBandName(aqi: number): CPCBBandName {
-  return getBand(aqi).name;
-}
-
 export function getBandHex(aqi: number): string {
   return getBand(aqi).hex;
-}
-
-export function getBandColor(aqi: number): string {
-  return getBand(aqi).color;
-}
-
-export function getBandBg(aqi: number): string {
-  return getBand(aqi).bgClass;
 }

@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * components/plan/PlanCard.tsx
+ *
+ * Expandable card for a single recommended action: shows its engine-computed
+ * impact and, when expanded, the explanation and a "how we calculate" link.
+ */
+
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, ChevronUp, Leaf, Wind, Car, Info } from "lucide-react";
@@ -80,11 +87,6 @@ export function PlanCard({ item, index }: PlanCardProps) {
                 <div className="mt-2 inline-flex items-center gap-1 bg-green-500/10 border border-green-500/20 text-green-400 rounded px-2 py-0.5 text-xs font-medium">
                   <Leaf className="w-3 h-3" />
                   {item.impact_value} {localizedUnit}
-                  {item.impact_cig_eq != null && item.impact_cig_eq > 0.05 && (
-                    <span className="opacity-70 ml-1">
-                      · ≈{item.impact_cig_eq.toFixed(1)} {t("cigEqAvoided")}
-                    </span>
-                  )}
                 </div>
               )}
             </div>

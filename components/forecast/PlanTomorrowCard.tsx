@@ -1,5 +1,11 @@
 "use client";
 
+/**
+ * components/forecast/PlanTomorrowCard.tsx
+ *
+ * Forecast card previewing tomorrow's outlook and the suggested plan-ahead action.
+ */
+
 import type { HourlyAQI, Profile } from "@/lib/types";
 import { getLocalizedBand } from "@/lib/cpcb-bands";
 import { useLocale, useT } from "@/lib/LocaleContext";

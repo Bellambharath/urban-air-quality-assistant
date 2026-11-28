@@ -92,7 +92,6 @@ export async function GET(request: NextRequest) {
       {
         error: "Unable to fetch AQI data. Please try again shortly.",
         code: "aqi_unavailable",
-        detail: err instanceof Error ? err.message : String(err),
       },
       { status: 503 }
     );

@@ -1,36 +1,23 @@
-// TODO: When GOOGLE_AIR_QUALITY_API_KEY is set in .env.local, replace static AQI estimates
-// with Google Maps Air Quality heatmap tiles:
-// https://airquality.googleapis.com/v1/mapTypes/UAQI_INDIGO_PERSIAN/heatmapTiles/{zoom}/{x}/{y}?key=KEY
-// Add as <image> or CSS background tiles within the view at the appropriate zoom level.
-
 "use client";
+
+/**
+ * app/map/page.tsx
+ *
+ * City comparison grid: ranks supported cities worst-to-best by AQI, with the
+ * user's current city fetched live and the rest from static fallbacks.
+ */
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowLeft, Check, Sparkles } from "lucide-react";
-import { SUPPORTED_CITIES } from "@/lib/constants";
+import { SUPPORTED_CITIES, STATIC_CITY_AQI } from "@/lib/constants";
 import { getLocalizedBand, CPCB_BANDS } from "@/lib/cpcb-bands";
 import { useProfile } from "@/hooks/useProfile";
 import { useLocale, useT } from "@/lib/LocaleContext";
 import { translateCity } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-
-// ─── Static AQI estimates (fallback when live AQI is unavailable) ───────────
-// Only the user's selected/current city is fetched live from /api/aqi.
-const STATIC_AQI: Record<string, number> = {
-  Delhi: 300,
-  Mumbai: 150,
-  Bengaluru: 100,
-  Hyderabad: 120,
-  Chennai: 80,
-  Kolkata: 200,
-  Pune: 130,
-  Ahmedabad: 180,
-  Lucknow: 280,
-  Jaipur: 220,
-};
 
 export default function MapPage() {
   const router = useRouter();
@@ -49,6 +36,7 @@ export default function MapPage() {
   // ── Fetch live AQI for user's city on mount ──────────────────────────────
   useEffect(() => {
     if (!isLoaded || !profile) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- toggles loading flags before the on-mount AQI fetch
     setLoadingAQI(true);
     setAqiError(null);
     fetch(`/api/aqi?lat=${profile.lat}&lng=${profile.lng}`)
@@ -75,7 +63,7 @@ export default function MapPage() {
   // ── Helpers ───────────────────────────────────────────────────────────────
   function getAQIForCity(cityName: string): number {
     if (cityName === profile?.city && liveAQI !== null) return liveAQI;
-    return STATIC_AQI[cityName] ?? 100;
+    return STATIC_CITY_AQI[cityName] ?? 100;
   }
 
   function handleSetCityAndNavigate(cityName: string) {

@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * app/onboarding/page.tsx
+ *
+ * Three-step profile setup (location, household health, home & commute) that
+ * captures the context behind every AirWise recommendation.
+ */
+
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";

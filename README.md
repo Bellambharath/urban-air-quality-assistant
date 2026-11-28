@@ -131,7 +131,7 @@ app/
   map/          # City comparison grid
   onboarding/   # 3-step profile setup
 components/      # UI components (aqi, plan, exposure, forecast, ui)
-hooks/          # useProfile, useAQI, useSimulate
+hooks/          # useProfile, useAQI
 lib/
   impact-engine.ts   # Deterministic, unit-tested impact math
   personalization.ts # Candidate selection + scoring (no LLM)

@@ -45,21 +45,6 @@ export const DEFAULT_NATURAL_ACH = 0.5;    // typical Indian apartment, windows 
 export const DEFAULT_CADR_M3H    = 300;    // mid-range purifier (e.g. Xiaomi Air Purifier 3H)
 export const DEFAULT_ROOM_VOLUME = 30;     // m³  (~3 m ceiling × 10 m² room)
 
-// ─── Ventilation Timing ───────────────────────────────────────────────────────
-// When outdoor AQI < this fraction of estimated indoor PM2.5, recommend opening windows
-export const VENTILATION_OUTDOOR_INDOOR_RATIO = 0.8;
-
-// ─── Personal Exposure Defaults ───────────────────────────────────────────────
-// Default day-schedule blocks if profile doesn't specify (hours)
-export const DEFAULT_SCHEDULE = {
-  sleep:   { start: 23, end: 6,  activity: "sleep"    as ActivityLevel },
-  morning: { start: 6,  end: 9,  activity: "light"    as ActivityLevel },
-  commute: { start: 9,  end: 10, activity: "moderate" as ActivityLevel },
-  work:    { start: 10, end: 18, activity: "rest"      as ActivityLevel },
-  evening: { start: 18, end: 21, activity: "light"    as ActivityLevel },
-  night:   { start: 21, end: 23, activity: "rest"      as ActivityLevel },
-};
-
 // ─── Protective & Clean-Air Assumptions ───────────────────────────────────────
 // NIOSH standard for N95: at least 95% filtration efficiency against 0.3 µm NaCl particles
 export const MASK_EFFICIENCY_N95 = 0.95;
@@ -70,6 +55,47 @@ export const CLEAN_WINDOW_PM25_RATIO = 0.6;
 // Typical Indian urban indoor/outdoor ratio with windows closed (no purifier)
 // Source: CPCB & IIT Delhi indoor air quality studies (2020)
 export const INDOOR_UNFILTERED_RATIO = 0.6;
+
+// ─── Personal Daily Exposure Fractions ────────────────────────────────────────
+// Indoor PM2.5 expressed as a fraction of the outdoor concentration, per scenario.
+// Sources: CPCB & IIT Delhi indoor air-quality studies (2020); EPA residential
+// air-cleaner guidance (2018); TERI Delhi commuter-exposure study (2022).
+
+// Baseline: natural infiltration, windows closed, no purifier (default routine)
+export const BASELINE_INDOOR_FRACTION = 0.75;
+
+// Optimized without a purifier: smart window closure during peak-pollution hours
+export const OPTIMIZED_INDOOR_FRACTION = 0.5;
+
+// Fraction of PM2.5 remaining after an N95 mask (1 − filtration efficiency)
+export const N95_FRACTION_REMAINING = 1 - MASK_EFFICIENCY_N95; // 0.05
+
+// Indoor PM2.5 fraction during the work block (office / indoor, no purifier)
+export const WORK_INDOOR_FRACTION = 0.6;
+
+// Elderly stay indoors for the evening block: higher infiltration exposure
+export const ELDERLY_EVENING_INDOOR_FRACTION = 0.85;
+
+// Optimized commute: vehicle users switch to cleaner metro
+export const OPTIMIZED_COMMUTE_SWAP_FRACTION = 0.35;
+
+// Outdoor PM2.5 fraction experienced per commute mode (exposure vs ambient air)
+export const COMMUTE_MODE_PM25_FRACTION: Record<string, number> = {
+  car_petrol: 0.7, car_diesel: 0.7, auto: 0.85,
+  bus: 0.8, metro: 0.75, bike: 1.0, walk: 1.0, wfh: BASELINE_INDOOR_FRACTION,
+};
+
+// Indoor PM2.5 reduction as a fraction of ambient PM2.5, by mitigation action.
+// Source: CPCB / IIT Delhi indoor-intervention studies; WHO household air-pollution guidance.
+export const INDOOR_ACTION_PM25_REDUCTION: Record<string, number> = {
+  "close-windows-peak": 0.35,
+  "ventilate-clean-hours": 0.25,
+  "wet-mop-floors": 0.15,
+  "cooking-lid-on": 0.2,
+  "cooking-chimney": 0.4,
+  "cooking-swap-induction": 0.5,
+  "heating-swap-electric": 0.6,
+};
 
 // ─── 10 Cities with default lat/lng ───────────────────────────────────────────
 export const SUPPORTED_CITIES = [
@@ -86,6 +112,13 @@ export const SUPPORTED_CITIES = [
 ] as const;
 
 export type CityName = (typeof SUPPORTED_CITIES)[number]["name"];
+
+// Static fallback AQI per city when a live reading is unavailable
+// (only the user's current city is fetched live from /api/aqi).
+export const STATIC_CITY_AQI: Record<string, number> = {
+  Delhi: 300, Mumbai: 150, Bengaluru: 100, Hyderabad: 120, Chennai: 80,
+  Kolkata: 200, Pune: 130, Ahmedabad: 180, Lucknow: 280, Jaipur: 220,
+};
 
 // ─── Personalization Thresholds ───────────────────────────────────────────────
 // AQI thresholds for outdoor activity recommendations, by sensitivity level

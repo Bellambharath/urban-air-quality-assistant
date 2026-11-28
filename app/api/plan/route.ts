@@ -22,14 +22,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { selectAndScoreCandidates, buildPlanItems } from "@/lib/personalization";
 import { buildPlanSystemPrompt, buildPlanUserPrompt, buildMorningBriefPrompt } from "@/lib/prompts";
+import { CANDIDATE_MODELS } from "@/lib/gemini";
 import type { Profile, AQISnapshot, PlanItem, PlanResponse } from "@/lib/types";
 
 export const runtime = "nodejs";
-
-const CANDIDATE_MODELS = [
-  "gemini-flash-lite-latest",
-  "gemini-2.5-flash",
-];
 
 function getGemini() {
   const apiKey = process.env.GOOGLE_GEMINI_API_KEY;

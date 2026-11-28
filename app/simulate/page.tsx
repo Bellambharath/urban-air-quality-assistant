@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * app/simulate/page.tsx
+ *
+ * What-If Simulator: toggle a purifier, commute mode, or outdoor hour and see
+ * the daily inhaled PM2.5 dose recompute live via /api/simulate (no LLM call).
+ */
+
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -65,6 +72,7 @@ export default function SimulatePage() {
   // Initialise commute mode from profile once loaded
   useEffect(() => {
     if (profile?.commute?.mode) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- initialises commute mode once the async profile loads
       setCommuteMode(profile.commute.mode);
     }
   }, [profile]);
@@ -76,6 +84,7 @@ export default function SimulatePage() {
     const eligible = snapshot.forecast.filter((h) => h.hour >= 5 && h.hour <= 22);
     if (eligible.length > 0) {
       const cleanest = eligible.reduce((min, h) => (h.pm25 < min.pm25 ? h : min), eligible[0]);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- seeds the activity hour from the cleanest forecast hour once data loads
       setActivityHour(cleanest.hour);
       initialHourSet.current = true;
     }

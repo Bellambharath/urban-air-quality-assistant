@@ -43,7 +43,7 @@ export const ProfileSchema = z.object({
   household: HouseholdSchema,
   home: HomeSchema,
   commute: CommuteSchema,
-  locale: z.enum(["en", "hi", "kn"]).default("en"),
+  locale: z.enum(["en", "hi"]).default("en").catch("en"),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });

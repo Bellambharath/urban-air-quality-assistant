@@ -18,6 +18,7 @@ import {
   MASK_EFFICIENCY_N95,
   CLEAN_WINDOW_PM25_RATIO,
   INDOOR_UNFILTERED_RATIO,
+  INDOOR_ACTION_PM25_REDUCTION,
 } from "./constants";
 import { ACTION_TRANSLATIONS_HI } from "./i18n";
 
@@ -346,25 +347,16 @@ function computeImpact(
     }
 
     case "close-windows-peak":
-      return { impactValue: Math.round(pm25 * 0.35), impactUnit: "µg/m³ indoor PM2.5 reduction" };
-
     case "ventilate-clean-hours":
-      return { impactValue: Math.round(pm25 * 0.25), impactUnit: "µg/m³ indoor PM2.5 reduction" };
-
     case "wet-mop-floors":
-      return { impactValue: Math.round(pm25 * 0.15), impactUnit: "µg/m³ indoor PM2.5 reduction" };
-
     case "cooking-lid-on":
-      return { impactValue: Math.round(pm25 * 0.20), impactUnit: "µg/m³ indoor PM2.5 reduction" };
-
     case "cooking-chimney":
-      return { impactValue: Math.round(pm25 * 0.40), impactUnit: "µg/m³ indoor PM2.5 reduction" };
-
     case "cooking-swap-induction":
-      return { impactValue: Math.round(pm25 * 0.50), impactUnit: "µg/m³ indoor PM2.5 reduction" };
-
     case "heating-swap-electric":
-      return { impactValue: Math.round(pm25 * 0.60), impactUnit: "µg/m³ indoor PM2.5 reduction" };
+      return {
+        impactValue: Math.round(pm25 * INDOOR_ACTION_PM25_REDUCTION[action.id]),
+        impactUnit: "µg/m³ indoor PM2.5 reduction",
+      };
 
     case "commute-swap-metro":
     case "commute-wfh": {

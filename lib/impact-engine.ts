@@ -16,6 +16,13 @@ import {
   DEFAULT_CADR_M3H,
   DEFAULT_ROOM_VOLUME,
   OUTDOOR_THRESHOLDS,
+  BASELINE_INDOOR_FRACTION,
+  OPTIMIZED_INDOOR_FRACTION,
+  N95_FRACTION_REMAINING,
+  WORK_INDOOR_FRACTION,
+  ELDERLY_EVENING_INDOOR_FRACTION,
+  OPTIMIZED_COMMUTE_SWAP_FRACTION,
+  COMMUTE_MODE_PM25_FRACTION,
   type ActivityLevel,
   type SensitivityGroup,
 } from "./constants";
@@ -170,7 +177,7 @@ export function computeSimulatedImpact(
 
   // 1. Purifier impact (box model: 300 m³/h CADR in 30 m³ room yields ~95% drop)
   const { pctReduction: pctIndoorDrop, fractionRemaining } = computePurifierImpact();
-  const indoorPM25After = toggles.purifierOn ? pm25 * fractionRemaining : pm25 * 0.75;
+  const indoorPM25After = toggles.purifierOn ? pm25 * fractionRemaining : pm25 * BASELINE_INDOOR_FRACTION;
 
   // 2. Commute CO₂ saved
   const co2SavedKgWeek = computeCommuteCO2Saved(
@@ -185,8 +192,8 @@ export function computeSimulatedImpact(
   const hourEntry = aqiSnapshot.forecast.find((h: HourlyAQI) => h.hour === toggles.activityHour);
   const optimizedOutdoorPM25 = hourEntry?.pm25 ?? pm25;
 
-  // Baseline scenario: natural infiltration (0.75) without active purifier
-  const baselineIndoorPM25 = pm25 * 0.75;
+  // Baseline scenario: natural infiltration without active purifier
+  const baselineIndoorPM25 = pm25 * BASELINE_INDOOR_FRACTION;
   const baselineIndoorDose = computeInhaledDose(baselineIndoorPM25, "light", indoorHours * 60);
   const baselineOutdoorDose = computeInhaledDose(baselineOutdoorPM25, "moderate", durationMin);
   const totalBaselineDose = baselineIndoorDose + baselineOutdoorDose;
@@ -309,26 +316,22 @@ export function computePersonalDailyExposureV2(
   const getPM25 = (h: number) => aqiByHour.get(h) ?? (aqiByHour.get(0) ?? 60);
 
   // Baseline indoor fraction: natural infiltration with windows closed / default routine, no purifier
-  const baselineIndoorFraction = 0.75;
+  const baselineIndoorFraction = BASELINE_INDOOR_FRACTION;
 
-  // Optimized indoor fraction: purifier if owned (CADR box model ~0.05), else smart window closure (0.50)
+  // Optimized indoor fraction: purifier if owned (CADR box model), else smart window closure
   const optimizedIndoorFraction = profile.home.hasPurifier
     ? computePurifierImpact().fractionRemaining
-    : 0.50;
+    : OPTIMIZED_INDOOR_FRACTION;
 
   // Commute outdoor PM2.5 fraction based on mode
-  const commuteModePM25Fraction: Record<string, number> = {
-    car_petrol: 0.7, car_diesel: 0.7, auto: 0.85,
-    bus: 0.8, metro: 0.75, bike: 1.0, walk: 1.0, wfh: baselineIndoorFraction,
-  };
-  const baselineCommuteFraction = commuteModePM25Fraction[profile.commute.mode] ?? 1.0;
+  const baselineCommuteFraction = COMMUTE_MODE_PM25_FRACTION[profile.commute.mode] ?? 1.0;
 
-  // Optimized commute: WFH stays indoor; bike/walk gets N95 (0.05); vehicle switches to clean metro
+  // Optimized commute: WFH stays indoor; bike/walk gets N95; vehicle switches to clean metro
   const optimizedCommuteFraction = profile.commute.mode === "wfh"
     ? optimizedIndoorFraction
     : ["bike", "walk"].includes(profile.commute.mode)
-      ? 0.05
-      : 0.35;
+      ? N95_FRACTION_REMAINING
+      : OPTIMIZED_COMMUTE_SWAP_FRACTION;
 
   // Find the best outdoor hour (lowest PM2.5 between 5–21)
   const eligibleHours = hourlyAQI.filter((h) => h.hour >= 5 && h.hour <= 21);
@@ -357,10 +360,10 @@ export function computePersonalDailyExposureV2(
     // Work 10–18 = 8h
     { label: "Work", durationMin: 8 * 60, activity: "rest",
       baselinePM25: getPM25(14) * baselineIndoorFraction,
-      optimizedPM25: getPM25(14) * (profile.commute.mode === "wfh" ? optimizedIndoorFraction : 0.6) },
+      optimizedPM25: getPM25(14) * (profile.commute.mode === "wfh" ? optimizedIndoorFraction : WORK_INDOOR_FRACTION) },
     // Evening 18–21 = 3h (elderly stay indoors in optimized)
     { label: "Evening", durationMin: 3 * 60, activity: "light",
-      baselinePM25: eveningPM25 * (profile.household.elderly > 0 ? 0.85 : baselineIndoorFraction),
+      baselinePM25: eveningPM25 * (profile.household.elderly > 0 ? ELDERLY_EVENING_INDOOR_FRACTION : baselineIndoorFraction),
       optimizedPM25: eveningPM25 * optimizedIndoorFraction },
     // Night 21–23 = 2h
     { label: "Night", durationMin: 2 * 60, activity: "rest",
@@ -369,7 +372,7 @@ export function computePersonalDailyExposureV2(
     // Outdoor activity block (timed to best hour in optimized with N95 mask)
     { label: "Outdoor", durationMin: 60, activity: "moderate",
       baselinePM25: getPM25(17),
-      optimizedPM25: bestPM25 * 0.05 },
+      optimizedPM25: bestPM25 * N95_FRACTION_REMAINING },
   ];
 
   let baselineUg = 0;

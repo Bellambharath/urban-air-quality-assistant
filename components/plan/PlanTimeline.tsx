@@ -1,5 +1,11 @@
 "use client";
 
+/**
+ * components/plan/PlanTimeline.tsx
+ *
+ * Renders the day's recommended actions as an ordered list of PlanCards.
+ */
+
 import { PlanCard } from "./PlanCard";
 import { useT } from "@/lib/LocaleContext";
 import type { PlanItem } from "@/lib/types";

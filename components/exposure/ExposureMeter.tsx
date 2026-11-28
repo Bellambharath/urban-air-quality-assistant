@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * components/exposure/ExposureMeter.tsx
+ *
+ * Personal exposure meter: compares the user's baseline daily inhaled PM2.5
+ * against the AirWise-optimized routine, in µg and cigarette-equivalents.
+ */
+
 import { useMemo } from "react";
 import { motion } from "framer-motion";
 import { computePersonalDailyExposureV2 } from "@/lib/impact-engine";

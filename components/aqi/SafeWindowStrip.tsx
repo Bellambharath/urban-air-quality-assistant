@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * components/aqi/SafeWindowStrip.tsx
+ *
+ * Highlights the cleanest outdoor hours (5 AM–11 PM), or an honest
+ * "no clean window today" banner when the whole day is poor.
+ */
+
 import { useMemo } from "react";
 import { getLocalizedBand } from "@/lib/cpcb-bands";
 import { useLocale, useT } from "@/lib/LocaleContext";

@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * app/dashboard/page.tsx
+ *
+ * Main dashboard: live AQI gauge, safe-outdoor-window strip, the personalized
+ * daily plan, and the personal exposure meter. Fetches the plan via /api/plan.
+ */
+
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -101,6 +108,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (snapshot && profile) {
       if (!plan && !planLoading && !planError) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- starts async plan fetch when live data first arrives
         fetchPlan(locale);
       } else if (lastPlanLocaleRef.current && lastPlanLocaleRef.current !== locale) {
         // Locale toggled: re-fetch plan & morning brief in the new language

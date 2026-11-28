@@ -5,12 +5,11 @@
  * Supported UI locales: en (English), hi (Hindi).
  */
 
-export type Locale = "en" | "hi" | "kn";
+export type Locale = "en" | "hi";
 
 export const LOCALE_LABELS: Record<Locale, string> = {
   en: "EN",
   hi: "हि",
-  kn: "ಕ",
 };
 
 export interface UIStrings {
@@ -331,7 +330,6 @@ const HI_STRINGS: UIStrings = {
 export const STRINGS: Record<Locale, UIStrings> = {
   en: EN_STRINGS,
   hi: HI_STRINGS,
-  kn: EN_STRINGS,
 };
 
 /** Returns the translated string for a given locale and key. */

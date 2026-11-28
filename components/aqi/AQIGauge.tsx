@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * components/aqi/AQIGauge.tsx
+ *
+ * Animated radial AQI gauge: draws the CPCB band arc, the active value arc,
+ * and the centred AQI number and band label for a given reading.
+ */
+
 import { motion } from "framer-motion";
 import { CPCB_BANDS, getLocalizedBand, getBandHex } from "@/lib/cpcb-bands";
 import { useLocale } from "@/lib/LocaleContext";

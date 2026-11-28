@@ -31,9 +31,10 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
   const { profile } = useProfile();
   const [locale, setLocaleState] = useState<Locale>("en");
 
-  // Sync locale from profile when it loads / changes (normalize legacy kn -> en)
+  // Sync locale from profile when it loads / changes (any non-hi value → en)
   useEffect(() => {
     if (profile?.locale) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- syncs UI locale once the async profile loads
       setLocaleState(profile.locale === "hi" ? "hi" : "en");
     }
   }, [profile?.locale]);

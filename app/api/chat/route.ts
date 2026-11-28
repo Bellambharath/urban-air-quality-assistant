@@ -14,14 +14,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { buildChatSystemPrompt } from "@/lib/prompts";
+import { CANDIDATE_MODELS } from "@/lib/gemini";
 import type { Profile, AQISnapshot, ChatMessage } from "@/lib/types";
 
 export const runtime = "nodejs";
-
-const CANDIDATE_MODELS = [
-  "gemini-flash-lite-latest",
-  "gemini-2.5-flash",
-];
 
 export async function POST(request: NextRequest) {
   let profile: Profile;

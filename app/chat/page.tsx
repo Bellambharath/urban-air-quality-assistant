@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * app/chat/page.tsx
+ *
+ * Chat assistant UI: streams answers from /api/chat, grounded in the user's
+ * profile and live AQI. The model never invents numbers.
+ */
+
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -34,6 +41,7 @@ export default function ChatPage() {
     if (!content.trim() || !profile || !snapshot || isStreaming) return;
 
     const userMsg: ChatMessage = {
+      // eslint-disable-next-line react-hooks/purity -- unique message id generated in an event handler, not during render
       id: `u-${Date.now()}`,
       role: "user",
       content,
@@ -45,6 +53,7 @@ export default function ChatPage() {
     setIsStreaming(true);
 
     // Placeholder assistant message
+    // eslint-disable-next-line react-hooks/purity -- unique message id generated in an event handler, not during render
     const assistantId = `a-${Date.now()}`;
     setMessages((prev) => [
       ...prev,
@@ -114,6 +123,7 @@ export default function ChatPage() {
                 break;
               }
               if (parsed.text) {
+                // eslint-disable-next-line react-hooks/immutability -- local accumulator in an async stream reader, not a React value
                 accumulated += parsed.text;
                 setMessages((prev) =>
                   prev.map((m) =>

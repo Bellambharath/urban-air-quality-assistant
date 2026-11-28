@@ -23,6 +23,7 @@ export function useProfile() {
   useEffect(() => {
     // Load from localStorage on mount (client only)
     const stored = loadProfile();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time client-only hydration from localStorage on mount (SSR-safe)
     setProfile(stored);
     setIsLoaded(true);
   }, []);
