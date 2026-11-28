@@ -8,7 +8,6 @@ import { describe, it, expect } from "vitest";
 import {
   computeCPCBFromStation,
   pm25ToAQI,
-  pm10ToAQI,
 } from "../lib/waqi-client";
 import { getBand } from "../lib/cpcb-bands";
 

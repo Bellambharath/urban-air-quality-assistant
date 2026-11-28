@@ -8,7 +8,7 @@
  * Key principle: prompts inject live data; they never ask the model to invent numbers.
  */
 
-import type { Profile, AQISnapshot, PlanItem } from "./types";
+import type { Profile, AQISnapshot } from "./types";
 import { getBand } from "./cpcb-bands";
 
 // ─── JSON output schema (typed as string for the prompt) ─────────────────────

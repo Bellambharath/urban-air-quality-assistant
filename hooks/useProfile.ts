@@ -12,7 +12,6 @@ import {
   loadProfile,
   saveProfile,
   clearProfile,
-  hasProfile,
   createDefaultProfile,
 } from "@/lib/profile";
 import type { Profile } from "@/lib/types";

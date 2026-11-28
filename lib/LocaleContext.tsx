@@ -22,7 +22,7 @@ interface LocaleContextValue {
 
 export const LocaleContext = createContext<LocaleContextValue>({
   locale: "en" as Locale,
-  setLocale: (_l: Locale) => {},
+  setLocale: () => {},
 });
 
 // ─── Provider ─────────────────────────────────────────────────────────────────

@@ -23,7 +23,6 @@ import type {
   HourlyAQI,
   Profile,
   DailyExposureResult,
-  PersonalizedDoseBlock,
   CommuteModeType,
   AQISnapshot,
   SimulateToggles,
@@ -276,23 +275,6 @@ export function computePersonalDailyExposure(
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
-
-function buildDayBlocks(profile: Profile, hourlyAQI: HourlyAQI[]): PersonalizedDoseBlock[] {
-  const aqiByHour = new Map(hourlyAQI.map((h) => [h.hour, h.pm25]));
-  const getPM25 = (h: number) => aqiByHour.get(h) ?? (aqiByHour.get(0) ?? 60);
-
-  const commuteHour = 8;
-  const commuteEndHour = 10;
-
-  return [
-    { label: "Sleep",   startHour: 23, endHour: 6,  activity: "sleep",    isOutdoor: false, pm25: getPM25(2),   doseUg: 0 },
-    { label: "Morning", startHour: 6,  endHour: 9,  activity: "light",    isOutdoor: false, pm25: getPM25(7),   doseUg: 0 },
-    { label: "Commute", startHour: commuteHour, endHour: commuteEndHour, activity: "moderate", isOutdoor: true, pm25: getPM25(commuteHour), doseUg: 0 },
-    { label: "Work",    startHour: 10, endHour: 18, activity: "rest",     isOutdoor: false, pm25: getPM25(14),  doseUg: 0 },
-    { label: "Evening", startHour: 18, endHour: 21, activity: "light",    isOutdoor: false, pm25: getPM25(19),  doseUg: 0 },
-    { label: "Night",   startHour: 21, endHour: 23, activity: "rest",     isOutdoor: false, pm25: getPM25(22),  doseUg: 0 },
-  ];
-}
 
 /** Checks whether outdoor activity is recommended for a sensitivity group at a given AQI. */
 export function isOutdoorSafe(aqi: number, group: SensitivityGroup = "general"): boolean {

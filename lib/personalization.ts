@@ -11,7 +11,6 @@ import type { Profile, AQISnapshot, ImpactMetric, PlanCategory, EffortLevel, Pla
 import {
   computeInhaledDose,
   computeExposureAvoided,
-  toCigaretteEquivalent,
   computeCommuteCO2Saved,
   computePurifierImpact,
 } from "./impact-engine";
@@ -20,7 +19,6 @@ import {
   CLEAN_WINDOW_PM25_RATIO,
   INDOOR_UNFILTERED_RATIO,
 } from "./constants";
-import { getBand } from "./cpcb-bands";
 import { ACTION_TRANSLATIONS_HI } from "./i18n";
 
 // ─── Candidate action catalog ─────────────────────────────────────────────────
@@ -222,8 +220,6 @@ export function selectAndScoreCandidates(
   snapshot: AQISnapshot
 ): ScoredCandidate[] {
   const aqi = snapshot.aqi;
-  const pm25 = snapshot.pm25;
-  const band = getBand(aqi);
 
   // Build a tag set representing this household's context
   const activeTags = new Set<string>(["general"]);

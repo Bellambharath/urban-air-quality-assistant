@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { getBand, getBandHex, getBandName, CPCB_BANDS } from "../lib/cpcb-bands";
+import { getBand, getBandHex, CPCB_BANDS } from "../lib/cpcb-bands";
 
 describe("CPCB Bands - Fractional AQI rounding and classification", () => {
   it("rounds fractional AQI 50.5 to Satisfactory (51), NOT Severe", () => {

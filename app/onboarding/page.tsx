@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { MapPin, Users, Home, ChevronRight, ChevronLeft, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { createDefaultProfile, saveProfile } from "@/lib/profile";
 import { SUPPORTED_CITIES } from "@/lib/constants";
 import type { Profile, HealthCondition, CommuteModeType, KitchenFuel, HomeType } from "@/lib/types";

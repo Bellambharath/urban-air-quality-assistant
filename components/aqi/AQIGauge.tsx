@@ -43,11 +43,10 @@ export function AQIGauge({ aqi, pm25, size = 220, className }: AQIGaugeProps) {
   const hex  = getBandHex(aqi);
 
   // Build band arc segments
-  let prevAngle = START_ANGLE;
-  const segments = BANDS.map(({ max, color }) => {
-    const startAng = prevAngle;
-    const endAng   = START_ANGLE + (max / MAX_AQI) * TOTAL_SWEEP;
-    prevAngle = endAng;
+  const segments = BANDS.map(({ max, color }, i) => {
+    const startAng =
+      i === 0 ? START_ANGLE : START_ANGLE + (BANDS[i - 1].max / MAX_AQI) * TOTAL_SWEEP;
+    const endAng = START_ANGLE + (max / MAX_AQI) * TOTAL_SWEEP;
     return { startAng, endAng, color };
   });
 

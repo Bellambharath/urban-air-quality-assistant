@@ -174,7 +174,7 @@ export function computeCPCBFromStation(station: {
   iaqi?: {
     pm25?: { v: number };
     pm10?: { v: number };
-    [key: string]: any;
+    [key: string]: { v: number } | undefined;
   };
 }): number {
   const hasPM25 = typeof station.iaqi?.pm25?.v === "number";

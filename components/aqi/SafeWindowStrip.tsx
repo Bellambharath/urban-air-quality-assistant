@@ -26,7 +26,7 @@ export function SafeWindowStrip({ forecast, className }: SafeWindowStripProps) {
   const currentHour = new Date().getHours();
 
   // Compute cleanest hours & air quality status in 5 AM – 11 PM
-  const { bestHourSet, minAQI, windowText, isVeryPoorAllDay, isPoorAllDay } = useMemo(() => {
+  const { bestHourSet, windowText, isVeryPoorAllDay, isPoorAllDay } = useMemo(() => {
     const entries = HOURS.map((h) => hourMap.get(h)).filter(
       (e): e is HourlyAQI => Boolean(e)
     );
